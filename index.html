@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Weekend Wheel — Astros Over/Under</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bitter:ital,wght@0,400;0,600;0,800;1,400&family=Saira+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<!-- Supabase client (only used once you paste your keys below) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ============================================================
+   CONFIG NOTE: edit the keys in the <script> at the bottom.
+   Until you do, the site runs in DEMO mode with sample data.
+   ============================================================ */
+:root{
+  --navy:#06294f;          /* Astros deep navy */
+  --navy2:#0a3a6e;
+  --orange:#f4641e;        /* Astros orange */
+  --orange-deep:#d9521a;
+  --gold:#f7b32b;
+  --cream:#f3ead6;         /* aged paper */
+  --cream2:#e7d9bb;
+  --ink:#1d1407;
+  --line:#c9b78d;
+  --sun1:#f4641e;          /* tequila sunrise stripes */
+  --sun2:#f59423;
+  --sun3:#f7b32b;
+  --shadow:0 2px 0 rgba(0,0,0,.18);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:'Bitter',Georgia,serif;
+  color:var(--ink);
+  background-color:var(--cream);
+  background-image:
+    radial-gradient(rgba(0,0,0,.05) 1px, transparent 1px);
+  background-size:5px 5px;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--orange-deep)}
+
+/* ---- tequila sunrise stripe bar (the classic Astros rainbow) ---- */
+.sunrise{height:10px;width:100%;
+  background:linear-gradient(90deg,var(--sun1) 0 33.3%,var(--sun2) 33.3% 66.6%,var(--sun3) 66.6% 100%);
+}
+
+/* ---------------- header ---------------- */
+header{
+  background:var(--navy);
+  color:var(--cream);
+  border-bottom:4px solid var(--ink);
+  position:relative;
+}
+.head-inner{max-width:1040px;margin:0 auto;padding:22px 20px 16px;text-align:center}
+.kicker{font-family:'Saira Condensed';letter-spacing:.32em;text-transform:uppercase;
+  font-size:13px;color:var(--gold);font-weight:700}
+h1.logo{font-family:'Anton';font-weight:400;letter-spacing:.5px;line-height:.92;
+  margin:6px 0 4px;font-size:clamp(38px,7vw,72px);text-transform:uppercase;
+  color:var(--cream);text-shadow:3px 3px 0 var(--orange),5px 5px 0 rgba(0,0,0,.35)}
+.logo .amp{color:var(--orange)}
+.subhead{font-family:'Saira Condensed';font-weight:600;letter-spacing:.18em;
+  text-transform:uppercase;font-size:14px;color:#cfe0f5}
+.star{color:var(--orange)}
+
+/* ---------------- nav tabs ---------------- */
+nav{background:var(--navy2);border-bottom:4px solid var(--ink);position:sticky;top:0;z-index:30}
+.nav-inner{max-width:1040px;margin:0 auto;display:flex;flex-wrap:wrap;gap:0}
+.tab{flex:1 1 auto;min-width:90px;border:0;cursor:pointer;
+  font-family:'Saira Condensed';font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  font-size:15px;padding:14px 8px;color:#bcd2ee;background:transparent;border-right:1px solid rgba(255,255,255,.08);
+  transition:background .12s,color .12s}
+.tab:last-child{border-right:0}
+.tab:hover{background:rgba(255,255,255,.06);color:#fff}
+.tab.active{background:var(--orange);color:#2a1402}
+.tab.admin-tab{flex:0 0 auto;min-width:64px;color:#8fb0d8}
+
+/* ---------------- layout ---------------- */
+main{max-width:1040px;margin:0 auto;padding:26px 18px 70px}
+.view{display:none;animation:fade .25s ease}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* generic "card" styled like a baseball-card / ticket */
+.card{background:var(--cream);border:3px solid var(--ink);border-radius:4px;
+  box-shadow:6px 6px 0 rgba(6,41,79,.18);padding:22px;margin-bottom:24px;position:relative}
+.card::after{content:"";position:absolute;inset:5px;border:1px solid var(--line);
+  border-radius:2px;pointer-events:none}
+.card > *{position:relative}
+.card h2{font-family:'Anton';font-weight:400;text-transform:uppercase;letter-spacing:.5px;
+  margin:0 0 4px;font-size:26px;color:var(--navy)}
+.card .eyebrow{font-family:'Saira Condensed';font-weight:700;letter-spacing:.2em;
+  text-transform:uppercase;font-size:12px;color:var(--orange-deep);margin-bottom:10px}
+
+/* ---------------- scoreboard (this week) ---------------- */
+.scoreboard{background:var(--navy);color:var(--cream);border:3px solid var(--ink);
+  border-radius:6px;padding:20px;box-shadow:6px 6px 0 rgba(0,0,0,.25);text-align:center;position:relative;overflow:hidden}
+.scoreboard .bolts{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:14px 14px;pointer-events:none}
+.sb-label{font-family:'Saira Condensed';letter-spacing:.28em;text-transform:uppercase;font-size:12px;color:var(--gold);font-weight:700}
+.sb-question{font-family:'Anton';font-weight:400;font-size:clamp(22px,3.6vw,34px);
+  line-height:1.05;margin:8px auto 2px;max-width:760px;text-transform:uppercase;letter-spacing:.5px}
+.sb-line{font-family:'Saira Condensed';font-weight:600;letter-spacing:.1em;color:#bcd2ee;text-transform:uppercase;font-size:14px}
+
+/* over/under pick buttons */
+.ou-wrap{display:flex;gap:14px;justify-content:center;margin:18px 0 4px;flex-wrap:wrap}
+.ou{flex:1 1 200px;max-width:260px;cursor:pointer;border:3px solid var(--ink);border-radius:6px;
+  background:var(--cream);padding:16px 10px;font-family:'Anton';font-size:30px;text-transform:uppercase;
+  letter-spacing:1px;color:var(--navy);transition:transform .08s, background .12s, color .12s;box-shadow:4px 4px 0 rgba(0,0,0,.25)}
+.ou small{display:block;font-family:'Saira Condensed';font-size:12px;letter-spacing:.18em;color:#5a4a2a}
+.ou:hover{transform:translateY(-2px)}
+.ou.sel{background:var(--orange);color:#2a1402}
+.ou.under.sel{background:var(--navy2);color:#fff}
+
+.name-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+input[type=text]{font-family:'Bitter';font-size:17px;padding:12px 14px;border:3px solid var(--ink);
+  border-radius:5px;background:#fff;min-width:240px}
+input[type=text]:focus{outline:none;border-color:var(--orange)}
+.btn{font-family:'Saira Condensed';font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+  font-size:16px;padding:13px 22px;border:3px solid var(--ink);border-radius:5px;cursor:pointer;
+  background:var(--orange);color:#2a1402;box-shadow:4px 4px 0 rgba(0,0,0,.28);transition:transform .08s}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(1px);box-shadow:2px 2px 0 rgba(0,0,0,.28)}
+.btn.ghost{background:var(--cream);color:var(--navy)}
+.btn.navy{background:var(--navy);color:var(--cream)}
+.btn.sm{font-size:13px;padding:8px 14px;box-shadow:3px 3px 0 rgba(0,0,0,.25)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+.msg{margin-top:12px;font-weight:600;min-height:20px}
+.msg.ok{color:#1c6b2e}.msg.err{color:#b1311b}
+
+/* live tally */
+.tally{display:flex;gap:14px;margin-top:18px;flex-wrap:wrap}
+.tally .col{flex:1 1 220px}
+.bar{height:30px;border:2px solid var(--ink);border-radius:4px;background:#fff;overflow:hidden;margin-top:6px}
+.bar > span{display:block;height:100%;width:0;transition:width .6s ease}
+.bar.over > span{background:var(--orange)}
+.bar.under > span{background:var(--navy2)}
+.tally .lab{font-family:'Saira Condensed';font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:14px;display:flex;justify-content:space-between}
+.entrylist{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-family:'Saira Condensed';font-weight:600;letter-spacing:.04em;background:var(--cream2);
+  border:2px solid var(--line);border-radius:20px;padding:4px 12px;font-size:14px}
+.chip .pk{font-size:11px;font-weight:800;margin-left:6px;padding:1px 6px;border-radius:10px;color:#fff}
+.pk.over{background:var(--orange-deep)}.pk.under{background:var(--navy2)}
+
+/* ---------------- standings ---------------- */
+.podium{display:flex;gap:14px;align-items:flex-end;justify-content:center;margin:6px 0 26px;flex-wrap:wrap}
+.pod{flex:1 1 150px;max-width:230px;text-align:center}
+.pod .plate{background:var(--navy);color:var(--cream);border:3px solid var(--ink);border-radius:6px;padding:14px 8px;box-shadow:5px 5px 0 rgba(0,0,0,.22)}
+.pod .nm{font-family:'Anton';font-size:24px;text-transform:uppercase;letter-spacing:.5px;line-height:1}
+.pod .sc{font-family:'Saira Condensed';font-weight:700;color:var(--gold);letter-spacing:.1em;font-size:13px;margin-top:4px}
+.pod .rk{font-family:'Anton';font-size:34px;color:var(--orange)}
+.pod.first .plate{background:var(--orange);color:#2a1402}
+.pod.first .sc{color:var(--navy)}
+.pod.first{transform:translateY(-12px)}
+
+table.standings{width:100%;border-collapse:collapse;font-family:'Bitter'}
+table.standings th{font-family:'Saira Condensed';text-transform:uppercase;letter-spacing:.12em;font-size:13px;
+  background:var(--navy);color:var(--cream);padding:10px 12px;text-align:left;border:2px solid var(--ink)}
+table.standings td{padding:10px 12px;border:2px solid var(--line);font-size:16px}
+table.standings tr:nth-child(even) td{background:rgba(255,255,255,.45)}
+table.standings td.num{font-family:'Saira Condensed';font-weight:800;text-align:center;width:70px}
+.medal{font-weight:800}
+.win-pill{display:inline-block;background:var(--gold);color:#3a2a00;border:2px solid var(--ink);
+  border-radius:20px;font-family:'Saira Condensed';font-weight:800;font-size:12px;padding:1px 9px;margin-left:4px}
+
+/* ---------------- wheel ---------------- */
+.wheel-stage{display:flex;flex-direction:column;align-items:center;gap:18px}
+.wheel-box{position:relative;width:min(440px,86vw);aspect-ratio:1}
+canvas#wheel{width:100%;height:100%;border-radius:50%;
+  border:10px solid var(--navy);box-shadow:0 0 0 4px var(--ink),8px 10px 0 rgba(0,0,0,.28),inset 0 0 0 0 #000}
+.pointer{position:absolute;top:-6px;left:50%;transform:translateX(-50%);z-index:5;
+  width:0;height:0;border-left:18px solid transparent;border-right:18px solid transparent;
+  border-top:34px solid var(--orange);filter:drop-shadow(0 2px 0 rgba(0,0,0,.4))}
+.hub{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;
+  background:var(--orange);border:4px solid var(--ink);z-index:4;display:flex;align-items:center;justify-content:center;
+  font-family:'Anton';color:#2a1402;font-size:13px;text-align:center;line-height:.9}
+.winner-banner{font-family:'Anton';text-transform:uppercase;text-align:center;font-size:clamp(26px,5vw,46px);
+  color:var(--navy);letter-spacing:1px;min-height:48px}
+.winner-banner b{color:var(--orange-deep)}
+.wheel-src{font-family:'Saira Condensed';font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#5a4a2a;font-size:13px;text-align:center}
+
+/* ---------------- winners hall ---------------- */
+.hall{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.ticket{background:var(--cream);border:3px dashed var(--ink);border-radius:6px;padding:16px;text-align:center;position:relative}
+.ticket .wk{font-family:'Saira Condensed';font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--orange-deep)}
+.ticket .who{font-family:'Anton';font-size:30px;text-transform:uppercase;color:var(--navy);line-height:1;margin:6px 0}
+.ticket .tag{font-family:'Saira Condensed';font-size:12px;letter-spacing:.1em;color:#5a4a2a;text-transform:uppercase}
+
+/* ---------------- admin ---------------- */
+.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:760px){.admin-grid{grid-template-columns:1fr}}
+.field{margin-bottom:12px}
+.field label{display:block;font-family:'Saira Condensed';font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:12px;margin-bottom:4px;color:var(--navy)}
+.field input,.field textarea{width:100%;font-family:'Bitter';font-size:15px;padding:9px 11px;border:2px solid var(--ink);border-radius:5px}
+.field textarea{min-height:64px;resize:vertical}
+.divider{height:2px;background:var(--line);margin:14px 0}
+.namepull{background:var(--cream2);border:2px solid var(--ink);border-radius:5px;padding:12px;font-family:'Bitter';white-space:pre-wrap;font-size:15px}
+.pill{display:inline-block;font-family:'Saira Condensed';font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px;border-radius:20px;border:2px solid var(--ink)}
+.pill.open{background:#bfe6c4}.pill.closed{background:var(--gold)}.pill.finalized{background:var(--cream2)}
+
+.demo-flag{background:var(--gold);color:#3a2a00;border:2px solid var(--ink);text-align:center;
+  font-family:'Saira Condensed';font-weight:700;letter-spacing:.08em;font-size:13px;padding:7px}
+footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-transform:uppercase;
+  color:#7a6a45;font-size:12px;padding:20px}
+.hidden{display:none !important}
+.center{text-align:center}
+.small{font-size:13px;color:#5a4a2a}
+</style>
+</head>
+<body>
+
+<div class="sunrise"></div>
+<div id="demoFlag" class="demo-flag hidden">⚾ DEMO MODE — showing sample data. Add your Supabase keys (see SETUP-GUIDE) to go live.</div>
+
+<header>
+  <div class="head-inner">
+    <div class="kicker">Astros Weekend Series</div>
+    <h1 class="logo">The Weekend <span class="amp">Wheel</span></h1>
+    <div class="subhead"><span class="star">★</span>&nbsp; Over / Under Standings &nbsp;•&nbsp; Pick. Be Right. Spin to Win. &nbsp;<span class="star">★</span></div>
+  </div>
+</header>
+
+<nav>
+  <div class="nav-inner">
+    <button class="tab active" data-view="week">This Week</button>
+    <button class="tab" data-view="standings">Standings</button>
+    <button class="tab" data-view="wheel">The Wheel</button>
+    <button class="tab" data-view="winners">Winners</button>
+    <button class="tab admin-tab" data-view="admin">Admin</button>
+  </div>
+</nav>
+
+<main>
+
+<!-- ===================== THIS WEEK ===================== -->
+<section id="view-week" class="view active">
+  <div class="scoreboard" id="scoreboard">
+    <div class="bolts"></div>
+    <div class="sb-label" id="sbLabel">This Week</div>
+    <div class="sb-question" id="sbQuestion">Loading this week's call…</div>
+    <div class="sb-line" id="sbLine"></div>
+  </div>
+
+  <div class="card" id="submitCard" style="margin-top:24px">
+    <div class="eyebrow">Make Your Call</div>
+    <h2>Lock In Your Pick</h2>
+    <div class="ou-wrap">
+      <button class="ou over" id="btnOver" data-pick="over">Over<small>Going big</small></button>
+      <button class="ou under" id="btnUnder" data-pick="under">Under<small>Cooling off</small></button>
+    </div>
+    <div class="name-row">
+      <input type="text" id="fanName" placeholder="Your name (how it shows on the wheel)" maxlength="24" autocomplete="off"/>
+      <button class="btn" id="submitPick">Submit Pick</button>
+    </div>
+    <div class="msg" id="submitMsg"></div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">Live Right Now</div>
+    <h2>The Room's Split</h2>
+    <div class="tally">
+      <div class="col">
+        <div class="lab"><span>Over</span><span id="overCount">0</span></div>
+        <div class="bar over"><span id="overBar"></span></div>
+      </div>
+      <div class="col">
+        <div class="lab"><span>Under</span><span id="underCount">0</span></div>
+        <div class="bar under"><span id="underBar"></span></div>
+      </div>
+    </div>
+    <p class="small" style="margin-top:14px"><b id="totalCount">0</b> picks in so far. Updates automatically.</p>
+    <div class="entrylist" id="entryList"></div>
+  </div>
+</section>
+
+<!-- ===================== STANDINGS ===================== -->
+<section id="view-standings" class="view">
+  <div class="card">
+    <div class="eyebrow">Season Leaderboard</div>
+    <h2>The Standings</h2>
+    <p class="small">Ranked by correct weekly calls. <span class="win-pill">★ = wheel win</span></p>
+    <div class="podium" id="podium"></div>
+    <table class="standings">
+      <thead><tr><th style="width:60px">#</th><th>Name</th><th class="num">Correct</th><th class="num">Wins</th></tr></thead>
+      <tbody id="standingsBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== THE WHEEL ===================== -->
+<section id="view-wheel" class="view">
+  <div class="card">
+    <div class="eyebrow">Monday Spin</div>
+    <h2>The Weekend Wheel</h2>
+    <p class="small" id="wheelHelp">Loading eligible names…</p>
+    <div class="wheel-stage">
+      <div class="wheel-box">
+        <div class="pointer"></div>
+        <canvas id="wheel" width="600" height="600"></canvas>
+        <div class="hub">SPIN</div>
+      </div>
+      <div class="winner-banner" id="wheelWinner"></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+        <button class="btn" id="spinBtn">Spin the Wheel</button>
+        <button class="btn navy hidden" id="recordWinBtn">Record as This Week's Winner</button>
+      </div>
+      <div class="wheel-src" id="wheelSrc"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== WINNERS ===================== -->
+<section id="view-winners" class="view">
+  <div class="card">
+    <div class="eyebrow">Hall of Champions</div>
+    <h2>Past Wheel Winners</h2>
+    <div class="hall" id="hall"></div>
+  </div>
+</section>
+
+<!-- ===================== ADMIN ===================== -->
+<section id="view-admin" class="view">
+  <!-- login gate -->
+  <div class="card" id="adminGate">
+    <div class="eyebrow">Staff Only</div>
+    <h2>Admin Sign In</h2>
+    <div id="gateLive">
+      <p class="small">Enter your admin email. We'll send a one-time magic link — no password.</p>
+      <div class="name-row" style="justify-content:flex-start">
+        <input type="text" id="adminEmail" placeholder="josh@apollohou.com" />
+        <button class="btn" id="sendLink">Send Magic Link</button>
+      </div>
+      <div class="msg" id="gateMsg"></div>
+    </div>
+    <div id="gateDemo" class="hidden">
+      <p class="small">Demo mode passcode is <b>astros</b> (you can change it in the SETUP guide). Real sign-in turns on once Supabase keys are added.</p>
+      <div class="name-row" style="justify-content:flex-start">
+        <input type="text" id="demoPass" placeholder="passcode" />
+        <button class="btn" id="demoEnter">Enter</button>
+      </div>
+      <div class="msg" id="demoMsg"></div>
+    </div>
+  </div>
+
+  <!-- admin panel -->
+  <div id="adminPanel" class="hidden">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div><div class="eyebrow">Signed In</div><h2 style="margin:0">Control Room</h2></div>
+        <button class="btn ghost sm" id="signOut">Sign Out</button>
+      </div>
+    </div>
+
+    <div class="admin-grid">
+      <!-- current week -->
+      <div class="card">
+        <div class="eyebrow">Current Week <span class="pill" id="curStatus">—</span></div>
+        <h2>Set This Week's Call</h2>
+        <div class="field"><label>Week label</label><input type="text" id="aLabel" placeholder="Weekend of 6/21"></div>
+        <div class="field"><label>Question shown to fans</label><textarea id="aQuestion" placeholder="Will the Astros go OVER or UNDER 1.5 wins this weekend?"></textarea></div>
+        <div class="field"><label>Line / helper (optional)</label><input type="text" id="aLine" placeholder="1.5 wins"></div>
+        <button class="btn sm" id="saveWeek">Save Changes</button>
+        <div class="divider"></div>
+        <div class="small">Submissions are <b id="subState">open</b>.</div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn ghost sm" id="toggleSubs">Close Submissions</button>
+          <button class="btn navy sm" id="newWeek">Start a New Week</button>
+        </div>
+        <div class="msg" id="weekMsg"></div>
+      </div>
+
+      <!-- grade + pull -->
+      <div class="card">
+        <div class="eyebrow">Grade & Pull Names</div>
+        <h2>Settle the Week</h2>
+        <p class="small">Pick what actually happened. Everyone who called it right gets a correct mark and goes on the wheel.</p>
+        <div class="ou-wrap" style="margin:10px 0">
+          <button class="ou over sm-ou" id="gradeOver" data-r="over" style="font-size:22px;padding:10px">Over Hit</button>
+          <button class="ou under sm-ou" id="gradeUnder" data-r="under" style="font-size:22px;padding:10px">Under Hit</button>
+        </div>
+        <button class="btn" id="gradeBtn">Grade This Week</button>
+        <div class="divider"></div>
+        <div class="eyebrow">Correct Names (for the wheel)</div>
+        <div class="namepull" id="namePull">—</div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn ghost sm" id="copyNames">Copy Names</button>
+          <button class="btn sm" id="loadWheel">Load Onto Wheel →</button>
+        </div>
+        <div class="msg" id="gradeMsg"></div>
+      </div>
+    </div>
+
+    <!-- manual tools -->
+    <div class="card">
+      <div class="eyebrow">Manual Tools</div>
+      <h2>Fix-Ups</h2>
+      <div class="admin-grid">
+        <div>
+          <div class="field"><label>Add a correct name to current week</label>
+            <input type="text" id="addCorrect" placeholder="Name"></div>
+          <button class="btn sm" id="addCorrectBtn">Add Correct Name</button>
+        </div>
+        <div>
+          <div class="field"><label>Manually record a wheel winner</label>
+            <input type="text" id="addWinnerName" placeholder="Name"></div>
+          <button class="btn sm" id="addWinnerBtn">Record Winner</button>
+        </div>
+      </div>
+      <div class="msg" id="manualMsg"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>The Weekend Wheel · Built for the crew · ⚾</footer>
+<div class="sunrise"></div>
+
+<script>
+/* =====================================================================
+   1) CONFIG  —  PASTE YOUR SUPABASE KEYS HERE TO GO LIVE
+   Find them in Supabase: Project Settings → API.
+   Leave them blank to keep running in DEMO mode.
+   ===================================================================== */
+const SUPABASE_URL  = "";          // e.g. "https://abcdxyz.supabase.co"
+const SUPABASE_ANON_KEY = "";      // the long "anon public" key
+const ADMIN_EMAIL   = "josh@apollohou.com";   // who is allowed in the admin panel
+const DEMO_PASSCODE = "astros";    // only used in demo mode
+
+/* =====================================================================
+   2) DATA LAYER — Supabase if keys are set, otherwise an in-memory demo
+   ===================================================================== */
+const LIVE = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+let sb = null;
+if (LIVE) sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ---- DEMO store (mirrors the SQL seed) ---- */
+const demo = {
+  weeks: [
+    {id:1,label:'Weekend of 6/5', question:'Astros weekend over/under', line:null, status:'finalized', result:null},
+    {id:2,label:'Weekend of 6/15',question:'Astros weekend over/under', line:null, status:'finalized', result:null},
+    {id:3,label:'Weekend of 6/19',question:'Will the Astros go OVER or UNDER 1.5 wins this weekend series?', line:'1.5 wins', status:'open', result:null}
+  ],
+  submissions: [],
+  winners: [
+    {id:1,week_id:2,name:'Chrispy'},
+    {id:2,week_id:1,name:'Nolberto'}
+  ],
+  _sid: 100
+};
+(function seedDemo(){
+  const w1=['Joe','John','Turtle','Caleb','Tia','Nolberto','Chrispy','Shark','Mike','Steph','Harry'];
+  const w2=['Joe','Jim','Cort','Chrispy'];
+  let i=1;
+  w1.forEach(n=>demo.submissions.push({id:i++,week_id:1,name:n,pick:null,is_correct:true}));
+  w2.forEach(n=>demo.submissions.push({id:i++,week_id:2,name:n,pick:null,is_correct:true}));
+  // a few sample live picks for week 3 so the tally isn't empty
+  [['Joe','over'],['Chrispy','under'],['Steph','over'],['Shark','over'],['Tia','under']]
+    .forEach(([n,p])=>demo.submissions.push({id:i++,week_id:3,name:n,pick:p,is_correct:null}));
+  demo._sid=i;
+})();
+
+/* unified API */
+const db = {
+  async weeks(){
+    if(!LIVE) return [...demo.weeks];
+    const {data,error}=await sb.from('weeks').select('*').order('created_at',{ascending:true});
+    if(error)throw error; return data;
+  },
+  async openWeek(){
+    const ws=await this.weeks();
+    return ws.filter(w=>w.status==='open').slice(-1)[0] || ws.slice(-1)[0] || null;
+  },
+  async submissions(weekId){
+    if(!LIVE) return demo.submissions.filter(s=>s.week_id===weekId);
+    const {data,error}=await sb.from('submissions').select('*').eq('week_id',weekId);
+    if(error)throw error; return data;
+  },
+  async allCorrect(){
+    if(!LIVE) return demo.submissions.filter(s=>s.is_correct);
+    const {data,error}=await sb.from('submissions').select('name,is_correct,week_id').eq('is_correct',true);
+    if(error)throw error; return data;
+  },
+  async winners(){
+    if(!LIVE) return [...demo.winners];
+    const {data,error}=await sb.from('winners').select('*').order('created_at',{ascending:false});
+    if(error)throw error; return data;
+  },
+  async submit(weekId,name,pick){
+    if(!LIVE){
+      const dup=demo.submissions.find(s=>s.week_id===weekId && s.name.toLowerCase()===name.toLowerCase());
+      if(dup) throw {code:'23505'};
+      demo.submissions.push({id:demo._sid++,week_id:weekId,name,pick,is_correct:null}); return;
+    }
+    const {error}=await sb.from('submissions').insert({week_id:weekId,name,pick});
+    if(error)throw error;
+  },
+  /* ---- admin ---- */
+  async updateWeek(id,fields){
+    if(!LIVE){Object.assign(demo.weeks.find(w=>w.id===id),fields);return;}
+    const {error}=await sb.from('weeks').update(fields).eq('id',id); if(error)throw error;
+  },
+  async grade(weekId,result){
+    // mark correctness for everyone with a pick
+    if(!LIVE){
+      demo.submissions.filter(s=>s.week_id===weekId).forEach(s=>{ if(s.pick) s.is_correct = (s.pick===result); });
+      Object.assign(demo.weeks.find(w=>w.id===weekId),{result,status:'finalized'}); return;
+    }
+    const subs=await this.submissions(weekId);
+    for(const s of subs){ if(s.pick!==null){
+      await sb.from('submissions').update({is_correct:s.pick===result}).eq('id',s.id);
+    }}
+    await sb.from('weeks').update({result,status:'finalized'}).eq('id',weekId);
+  },
+  async newWeek(label,question,line){
+    if(!LIVE){const id=Math.max(...demo.weeks.map(w=>w.id))+1;
+      demo.weeks.push({id,label,question,line,status:'open',result:null});return;}
+    const {error}=await sb.from('weeks').insert({label,question,line,status:'open'}); if(error)throw error;
+  },
+  async addCorrect(weekId,name){
+    if(!LIVE){
+      let s=demo.submissions.find(x=>x.week_id===weekId&&x.name.toLowerCase()===name.toLowerCase());
+      if(s)s.is_correct=true; else demo.submissions.push({id:demo._sid++,week_id:weekId,name,pick:null,is_correct:true});
+      return;
+    }
+    // upsert-ish: try insert, if dup then update
+    const {error}=await sb.from('submissions').insert({week_id:weekId,name,is_correct:true});
+    if(error && error.code==='23505'){
+      await sb.from('submissions').update({is_correct:true}).eq('week_id',weekId).ilike('name',name);
+    } else if(error) throw error;
+  },
+  async addWinner(weekId,name){
+    if(!LIVE){demo.winners.unshift({id:demo._sid++,week_id:weekId,name});return;}
+    const {error}=await sb.from('winners').insert({week_id:weekId,name}); if(error)throw error;
+  }
+};
+
+/* =====================================================================
+   3) STATE + helpers
+   ===================================================================== */
+let currentWeek=null;          // the open/most-recent week object
+let selectedPick=null;         // 'over' | 'under' on the public form
+let gradeResult=null;          // admin grade choice
+let wheelNames=[];             // names currently on the wheel
+let isAdmin=false;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function weekLabelById(id,weeks){const w=weeks.find(w=>w.id===id);return w?w.label:'';}
+
+/* =====================================================================
+   4) NAV
+   ===================================================================== */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const v=t.dataset.view;
+  $('view-'+v).classList.add('active');
+  if(v==='standings')renderStandings();
+  if(v==='winners')renderWinners();
+  if(v==='wheel')initWheelView();
+  if(v==='admin')renderAdmin();
+}));
+
+/* =====================================================================
+   5) THIS WEEK
+   ===================================================================== */
+async function loadWeek(){
+  currentWeek=await db.openWeek();
+  if(!currentWeek){$('sbQuestion').textContent='No week set yet.';return;}
+  $('sbLabel').textContent=currentWeek.label||'This Week';
+  $('sbQuestion').textContent=currentWeek.question||'—';
+  $('sbLine').textContent=currentWeek.line?('Line: '+currentWeek.line):'';
+  const open=currentWeek.status==='open';
+  $('btnOver').disabled=!open;$('btnUnder').disabled=!open;
+  $('fanName').disabled=!open;$('submitPick').disabled=!open;
+  if(!open){$('submitMsg').className='msg';$('submitMsg').textContent='Submissions for this week are closed. Check the Standings!';}
+  refreshTally();
+}
+$('btnOver').addEventListener('click',()=>pick('over'));
+$('btnUnder').addEventListener('click',()=>pick('under'));
+function pick(p){selectedPick=p;
+  $('btnOver').classList.toggle('sel',p==='over');
+  $('btnUnder').classList.toggle('sel',p==='under');
+}
+$('submitPick').addEventListener('click',async()=>{
+  const m=$('submitMsg');const name=$('fanName').value.trim();
+  if(!selectedPick){m.className='msg err';m.textContent='Pick Over or Under first.';return;}
+  if(name.length<2){m.className='msg err';m.textContent='Add your name so it can land on the wheel.';return;}
+  try{
+    await db.submit(currentWeek.id,name,selectedPick);
+    m.className='msg ok';m.textContent='✅ Locked in, '+name+'! Good luck.';
+    $('fanName').value='';selectedPick=null;
+    $('btnOver').classList.remove('sel');$('btnUnder').classList.remove('sel');
+    refreshTally();
+  }catch(e){
+    if(e&&e.code==='23505'){m.className='msg err';m.textContent='That name already submitted this week.';}
+    else{m.className='msg err';m.textContent='Something went wrong — try again.';console.error(e);}
+  }
+});
+async function refreshTally(){
+  if(!currentWeek)return;
+  const subs=await db.submissions(currentWeek.id);
+  const picks=subs.filter(s=>s.pick);
+  const over=picks.filter(s=>s.pick==='over').length;
+  const under=picks.filter(s=>s.pick==='under').length;
+  const total=picks.length;
+  $('overCount').textContent=over;$('underCount').textContent=under;$('totalCount').textContent=total;
+  $('overBar').style.width=(total?over/total*100:0)+'%';
+  $('underBar').style.width=(total?under/total*100:0)+'%';
+  $('entryList').innerHTML=picks.slice().reverse().map(s=>
+    `<span class="chip">${esc(s.name)}<span class="pk ${s.pick}">${s.pick.toUpperCase()}</span></span>`).join('');
+}
+setInterval(()=>{if($('view-week').classList.contains('active'))refreshTally();},8000);
+
+/* =====================================================================
+   6) STANDINGS
+   ===================================================================== */
+async function renderStandings(){
+  const [correct,wins]=await Promise.all([db.allCorrect(),db.winners()]);
+  const map={};
+  correct.forEach(s=>{const k=s.name.trim();(map[k]=map[k]||{name:k,correct:0,wins:0}).correct++;});
+  wins.forEach(w=>{const k=w.name.trim();(map[k]=map[k]||{name:k,correct:0,wins:0}).wins++;});
+  const rows=Object.values(map).sort((a,b)=>b.correct-a.correct||b.wins-a.wins||a.name.localeCompare(b.name));
+  // podium
+  const top=rows.slice(0,3);const order=[1,0,2]; // 2nd, 1st, 3rd visual order
+  $('podium').innerHTML=order.filter(i=>top[i]).map(i=>{
+    const r=top[i];const rank=i+1;
+    return `<div class="pod ${rank===1?'first':''}">
+      <div class="rk">${rank===1?'★':rank}</div>
+      <div class="plate"><div class="nm">${esc(r.name)}</div>
+      <div class="sc">${r.correct} correct${r.wins?` · ${r.wins}★`:''}</div></div></div>`;
+  }).join('');
+  $('standingsBody').innerHTML=rows.map((r,i)=>{
+    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1);
+    return `<tr><td class="num medal">${medal}</td>
+      <td>${esc(r.name)}${r.wins?` <span class="win-pill">★ ${r.wins}</span>`:''}</td>
+      <td class="num">${r.correct}</td><td class="num">${r.wins}</td></tr>`;
+  }).join('') || `<tr><td colspan="4" class="center small">No results yet.</td></tr>`;
+}
+
+/* =====================================================================
+   7) WINNERS HALL
+   ===================================================================== */
+async function renderWinners(){
+  const [wins,weeks]=await Promise.all([db.winners(),db.weeks()]);
+  $('hall').innerHTML=wins.map(w=>`
+    <div class="ticket"><div class="wk">${esc(weekLabelById(w.week_id,weeks)||'Week')}</div>
+    <div class="who">${esc(w.name)}</div><div class="tag">Wheel Champion ★</div></div>`).join('')
+    || `<p class="small center">No winners recorded yet.</p>`;
+}
+
+/* =====================================================================
+   8) THE WHEEL
+   ===================================================================== */
+const cv=$('wheel'),ctx=cv.getContext('2d');
+let wheelAngle=0,spinning=false;
+const palette=['#06294f','#f4641e','#0a3a6e','#f59423','#123e6e','#d9521a'];
+function drawWheel(){
+  const n=wheelNames.length, R=cv.width/2, cx=R, cy=R;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(n===0){
+    ctx.fillStyle='#0a3a6e';ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.fill();
+    ctx.fillStyle='#f3ead6';ctx.font="bold 26px 'Saira Condensed',sans-serif";ctx.textAlign='center';
+    ctx.fillText('No names loaded',cx,cy);return;
+  }
+  const seg=2*Math.PI/n;
+  for(let i=0;i<n;i++){
+    const a0=wheelAngle+i*seg, a1=a0+seg;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,a0,a1);ctx.closePath();
+    ctx.fillStyle=palette[i%palette.length];ctx.fill();
+    ctx.strokeStyle='rgba(243,234,214,.6)';ctx.lineWidth=2;ctx.stroke();
+    // label
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(a0+seg/2);
+    ctx.textAlign='right';ctx.fillStyle='#f3ead6';
+    const fs=Math.max(13,Math.min(26,520/n));
+    ctx.font=`700 ${fs}px 'Saira Condensed',sans-serif`;
+    ctx.fillText(wheelNames[i],R-18,fs/3);
+    ctx.restore();
+  }
+  // outer ring accents
+  ctx.beginPath();ctx.arc(cx,cy,R-1,0,7);ctx.strokeStyle='#1d1407';ctx.lineWidth=4;ctx.stroke();
+}
+async function initWheelView(){
+  // default: load correct names from most recent finalized week if wheel empty
+  if(wheelNames.length===0){
+    const weeks=await db.weeks();
+    const fin=weeks.filter(w=>w.status==='finalized').slice(-1)[0];
+    if(fin){
+      const subs=await db.submissions(fin.id);
+      wheelNames=subs.filter(s=>s.is_correct).map(s=>s.name);
+      $('wheelSrc').textContent='Showing correct names from '+fin.label;
+    }
+  }
+  $('wheelHelp').textContent= isAdmin
+    ? 'Names come from the graded week. Spin, then record the winner.'
+    : 'Tune in Monday — the host spins this live!';
+  $('recordWinBtn').classList.toggle('hidden',!isAdmin);
+  drawWheel();
+}
+$('spinBtn').addEventListener('click',()=>{
+  if(spinning||wheelNames.length===0)return;
+  spinning=true;$('wheelWinner').textContent='';
+  const spins=5+Math.random()*3;
+  const target=wheelAngle+spins*2*Math.PI+Math.random()*2*Math.PI;
+  const start=wheelAngle,dur=4200+Math.random()*900,t0=performance.now();
+  (function frame(t){
+    const p=Math.min(1,(t-t0)/dur);
+    const e=1-Math.pow(1-p,3); // ease-out cubic
+    wheelAngle=start+(target-start)*e;
+    drawWheel();
+    if(p<1)requestAnimationFrame(frame);
+    else{spinning=false;announceWinner();}
+  })(t0);
+});
+function announceWinner(){
+  const n=wheelNames.length,seg=2*Math.PI/n;
+  // pointer at top = -90deg = 1.5π. find segment under it.
+  const norm=((1.5*Math.PI - wheelAngle)% (2*Math.PI)+2*Math.PI)%(2*Math.PI);
+  const idx=Math.floor(norm/seg)%n;
+  const win=wheelNames[idx];
+  $('wheelWinner').innerHTML='Winner: <b>'+esc(win)+'</b> ★';
+  $('recordWinBtn').dataset.name=win;
+}
+$('recordWinBtn').addEventListener('click',async()=>{
+  const name=$('recordWinBtn').dataset.name;if(!name)return;
+  const weeks=await db.weeks();
+  const wk=weeks.filter(w=>w.status==='finalized').slice(-1)[0]||weeks.slice(-1)[0];
+  try{await db.addWinner(wk.id,name);$('wheelWinner').innerHTML='Recorded: <b>'+esc(name)+'</b> ★ — see Winners tab!';}
+  catch(e){$('wheelWinner').textContent='Could not record — try the Admin tab.';console.error(e);}
+});
+
+/* =====================================================================
+   9) ADMIN
+   ===================================================================== */
+function renderAdmin(){
+  $('gateLive').classList.toggle('hidden',!LIVE);
+  $('gateDemo').classList.toggle('hidden',LIVE);
+  $('adminGate').classList.toggle('hidden',isAdmin);
+  $('adminPanel').classList.toggle('hidden',!isAdmin);
+  if(isAdmin)fillAdmin();
+}
+async function fillAdmin(){
+  const wk=await db.openWeek();if(!wk)return;
+  $('aLabel').value=wk.label||'';$('aQuestion').value=wk.question||'';$('aLine').value=wk.line||'';
+  $('curStatus').textContent=wk.status;$('curStatus').className='pill '+wk.status;
+  $('subState').textContent=wk.status==='open'?'open':'closed';
+  $('toggleSubs').textContent=wk.status==='open'?'Close Submissions':'Re-open Submissions';
+  refreshNamePull(wk.id);
+}
+async function refreshNamePull(weekId){
+  const subs=await db.submissions(weekId);
+  const names=subs.filter(s=>s.is_correct).map(s=>s.name);
+  $('namePull').textContent=names.length?names.join(', '):'— (grade the week to populate)';
+  $('namePull').dataset.names=JSON.stringify(names);
+}
+/* magic-link login */
+$('sendLink')?.addEventListener('click',async()=>{
+  const m=$('gateMsg');const email=$('adminEmail').value.trim();
+  if(!email){m.className='msg err';m.textContent='Enter your email.';return;}
+  try{
+    const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href}});
+    if(error)throw error;
+    m.className='msg ok';m.textContent='✅ Check your email for the magic link, then come back here.';
+  }catch(e){m.className='msg err';m.textContent='Could not send link: '+(e.message||e);}
+});
+/* demo passcode */
+$('demoEnter')?.addEventListener('click',()=>{
+  if($('demoPass').value.trim()===DEMO_PASSCODE){isAdmin=true;renderAdmin();}
+  else{$('demoMsg').className='msg err';$('demoMsg').textContent='Wrong passcode.';}
+});
+$('signOut').addEventListener('click',async()=>{
+  if(LIVE)await sb.auth.signOut();isAdmin=false;renderAdmin();
+});
+/* save week */
+$('saveWeek').addEventListener('click',async()=>{
+  const wk=await db.openWeek();
+  try{await db.updateWeek(wk.id,{label:$('aLabel').value.trim(),question:$('aQuestion').value.trim(),line:$('aLine').value.trim()||null});
+    $('weekMsg').className='msg ok';$('weekMsg').textContent='Saved.';loadWeek();}
+  catch(e){$('weekMsg').className='msg err';$('weekMsg').textContent='Save failed.';console.error(e);}
+});
+$('toggleSubs').addEventListener('click',async()=>{
+  const wk=await db.openWeek();
+  const next=wk.status==='open'?'closed':'open';
+  await db.updateWeek(wk.id,{status:next});fillAdmin();loadWeek();
+});
+$('newWeek').addEventListener('click',async()=>{
+  const label=prompt('New week label?','Weekend of ');if(label===null)return;
+  const q=prompt('Question for fans?','Will the Astros go OVER or UNDER 1.5 wins this weekend?');if(q===null)return;
+  await db.newWeek(label.trim(),q.trim(),null);
+  $('weekMsg').className='msg ok';$('weekMsg').textContent='New week opened.';
+  fillAdmin();loadWeek();
+});
+/* grade */
+$('gradeOver').addEventListener('click',()=>setGrade('over'));
+$('gradeUnder').addEventListener('click',()=>setGrade('under'));
+function setGrade(r){gradeResult=r;
+  $('gradeOver').classList.toggle('sel',r==='over');
+  $('gradeUnder').classList.toggle('sel',r==='under');}
+$('gradeBtn').addEventListener('click',async()=>{
+  const m=$('gradeMsg');if(!gradeResult){m.className='msg err';m.textContent='Pick Over or Under first.';return;}
+  const wk=await db.openWeek();
+  try{await db.grade(wk.id,gradeResult);
+    m.className='msg ok';m.textContent='Graded! '+gradeResult.toUpperCase()+' hit. Names pulled below.';
+    refreshNamePull(wk.id);fillAdmin();}
+  catch(e){m.className='msg err';m.textContent='Grade failed.';console.error(e);}
+});
+$('copyNames').addEventListener('click',()=>{
+  navigator.clipboard.writeText($('namePull').textContent).then(()=>{
+    $('gradeMsg').className='msg ok';$('gradeMsg').textContent='Copied!';});
+});
+$('loadWheel').addEventListener('click',()=>{
+  wheelNames=JSON.parse($('namePull').dataset.names||'[]');
+  if(!wheelNames.length){$('gradeMsg').className='msg err';$('gradeMsg').textContent='No correct names yet.';return;}
+  $('wheelSrc').textContent='Loaded '+wheelNames.length+' correct names.';
+  document.querySelector('[data-view="wheel"]').click();
+});
+/* manual */
+$('addCorrectBtn').addEventListener('click',async()=>{
+  const wk=await db.openWeek();const n=$('addCorrect').value.trim();if(!n)return;
+  await db.addCorrect(wk.id,n);$('addCorrect').value='';
+  $('manualMsg').className='msg ok';$('manualMsg').textContent=n+' added as correct.';refreshNamePull(wk.id);
+});
+$('addWinnerBtn').addEventListener('click',async()=>{
+  const wk=await db.openWeek();const n=$('addWinnerName').value.trim();if(!n)return;
+  await db.addWinner(wk.id,n);$('addWinnerName').value='';
+  $('manualMsg').className='msg ok';$('manualMsg').textContent=n+' recorded as a winner.';
+});
+
+/* =====================================================================
+   10) BOOT
+   ===================================================================== */
+async function boot(){
+  $('demoFlag').classList.toggle('hidden',LIVE);
+  if(LIVE){
+    const {data}=await sb.auth.getSession();
+    const email=data?.session?.user?.email;
+    isAdmin = !!email && email.toLowerCase()===ADMIN_EMAIL.toLowerCase();
+    sb.auth.onAuthStateChange((_e,session)=>{
+      const em=session?.user?.email;
+      isAdmin=!!em && em.toLowerCase()===ADMIN_EMAIL.toLowerCase();
+      if($('view-admin').classList.contains('active'))renderAdmin();
+    });
+  }
+  await loadWeek();
+  drawWheel();
+}
+boot();
+</script>
+</body>
+</html>
