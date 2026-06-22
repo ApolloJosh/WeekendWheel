@@ -60,7 +60,7 @@ header{
 h1.logo{font-family:'Anton';font-weight:400;letter-spacing:.5px;line-height:.92;
   margin:6px 0 4px;font-size:clamp(38px,7vw,72px);text-transform:uppercase;
   color:var(--cream);text-shadow:3px 3px 0 var(--orange),5px 5px 0 rgba(0,0,0,.35)}
-.logo .amp{color:var(--orange)}
+.logo .amp{color:var(--orange);text-shadow:3px 3px 0 var(--cream),5px 5px 0 rgba(0,0,0,.35)}
 .subhead{font-family:'Saira Condensed';font-weight:600;letter-spacing:.18em;
   text-transform:uppercase;font-size:14px;color:#cfe0f5}
 .star{color:var(--orange)}
@@ -114,9 +114,9 @@ main{max-width:1040px;margin:0 auto;padding:26px 18px 70px}
 .ou.under.sel{background:var(--navy2);color:#fff}
 
 .name-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}
-input[type=text]{font-family:'Bitter';font-size:17px;padding:12px 14px;border:3px solid var(--ink);
-  border-radius:5px;background:#fff;min-width:240px}
-input[type=text]:focus{outline:none;border-color:var(--orange)}
+input[type=text],input[type=password]{font-family:'Bitter';font-size:17px;padding:12px 14px;border:3px solid var(--ink);
+  border-radius:5px;background:#fff;min-width:200px}
+input[type=text]:focus,input[type=password]:focus{outline:none;border-color:var(--orange)}
 .btn{font-family:'Saira Condensed';font-weight:800;letter-spacing:.12em;text-transform:uppercase;
   font-size:16px;padding:13px 22px;border:3px solid var(--ink);border-radius:5px;cursor:pointer;
   background:var(--orange);color:#2a1402;box-shadow:4px 4px 0 rgba(0,0,0,.28);transition:transform .08s}
@@ -327,10 +327,11 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
     <div class="eyebrow">Staff Only</div>
     <h2>Admin Sign In</h2>
     <div id="gateLive">
-      <p class="small">Enter your admin email. We'll send a one-time magic link — no password.</p>
+      <p class="small">Sign in with your admin email and password.</p>
       <div class="name-row" style="justify-content:flex-start">
-        <input type="text" id="adminEmail" placeholder="josh@apollohou.com" />
-        <button class="btn" id="sendLink">Send Magic Link</button>
+        <input type="text" id="adminEmail" placeholder="josh@apollohou.com" autocomplete="username" />
+        <input type="password" id="adminPass" placeholder="password" autocomplete="current-password" />
+        <button class="btn" id="signIn">Sign In</button>
       </div>
       <div class="msg" id="gateMsg"></div>
     </div>
@@ -756,16 +757,30 @@ async function refreshNamePull(weekId){
   $('namePull').textContent=names.length?names.join(', '):'— (grade the week to populate)';
   $('namePull').dataset.names=JSON.stringify(names);
 }
-/* magic-link login */
-$('sendLink')?.addEventListener('click',async()=>{
-  const m=$('gateMsg');const email=$('adminEmail').value.trim();
-  if(!email){m.className='msg err';m.textContent='Enter your email.';return;}
+/* email + password login (no redirect needed — works locally or hosted) */
+async function doSignIn(){
+  const m=$('gateMsg');
+  const email=$('adminEmail').value.trim();
+  const pass=$('adminPass').value;
+  if(!email||!pass){m.className='msg err';m.textContent='Enter your email and password.';return;}
+  m.className='msg';m.textContent='Signing in…';
   try{
-    const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href}});
+    const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
     if(error)throw error;
-    m.className='msg ok';m.textContent='✅ Check your email for the magic link, then come back here.';
-  }catch(e){m.className='msg err';m.textContent='Could not send link: '+(e.message||e);}
-});
+    const em=data?.user?.email||'';
+    if(em.toLowerCase()!==ADMIN_EMAIL.toLowerCase()){
+      m.className='msg err';m.textContent='That account is not the admin.';
+      await sb.auth.signOut();return;
+    }
+    isAdmin=true;$('adminPass').value='';renderAdmin();
+  }catch(e){
+    m.className='msg err';
+    m.textContent=(e.message||'').includes('Invalid')
+      ? 'Wrong email or password.' : 'Sign-in failed: '+(e.message||e);
+  }
+}
+$('signIn')?.addEventListener('click',doSignIn);
+$('adminPass')?.addEventListener('keydown',e=>{if(e.key==='Enter')doSignIn();});
 /* demo passcode */
 $('demoEnter')?.addEventListener('click',()=>{
   if($('demoPass').value.trim()===DEMO_PASSCODE){isAdmin=true;renderAdmin();}
