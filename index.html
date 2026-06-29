@@ -843,7 +843,7 @@ $('spinBtn').addEventListener('click',()=>{
   spinning=true;$('wheelWinner').textContent='';$('recordWinBtn').classList.add('hidden');
   const hub=document.querySelector('.hub');if(hub)hub.textContent='…';
   // --- per-spin random variance so it never feels the same twice ---
-  const spins=18+Math.random()*8;                                  // 18–26 full turns
+  const spins=38+Math.random()*14;                                 // 38–52 turns → blazing launch (wagon-wheel blur), still lands slow
   const target=wheelAngle+spins*2*Math.PI+Math.random()*2*Math.PI; // random landing
   const start=wheelAngle;
   const dur=SPIN_CURVE.tEnd*1000*(0.9+Math.random()*0.2);          // ±10% duration jitter
