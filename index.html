@@ -821,7 +821,7 @@ async function initWheelView(){
 // Spin speed profile (designed on the curve editor). X = seconds, Y = speed 0-100.
 // Because speed is never negative, the integral below is always increasing →
 // the wheel only ever moves forward and lands exactly on a segment.
-const SPEED_PTS=[{t:0,v:39},{t:0.18,v:90},{t:0.84,v:100},{t:3.05,v:97},{t:3.77,v:82},{t:5.72,v:52},{t:7.36,v:25},{t:8.59,v:11},{t:10.23,v:3},{t:15,v:0}];
+const SPEED_PTS=[{t:0,v:3.1},{t:0.18,v:7.2},{t:0.32,v:13.46},{t:1.94,v:15},{t:3.94,v:13},{t:5.92,v:8.42},{t:7.51,v:4.67},{t:8.32,v:3.2},{t:9.35,v:1.72},{t:10.15,v:0.9},{t:11.42,v:0.38},{t:15,v:0}];  // Y = revolutions/second; area = total turns
 function buildCurve(pts){
   const cum=[0];let A=0;
   for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];A+=(a.v+b.v)/2*(b.t-a.t);cum.push(A);}
@@ -842,11 +842,11 @@ $('spinBtn').addEventListener('click',()=>{
   if(spinning||segments.length===0)return;
   spinning=true;$('wheelWinner').textContent='';$('recordWinBtn').classList.add('hidden');
   const hub=document.querySelector('.hub');if(hub)hub.textContent='…';
-  // --- per-spin random variance so it never feels the same twice ---
-  const spins=38+Math.random()*14;                                 // 38–52 turns → blazing launch (wagon-wheel blur), still lands slow
-  const target=wheelAngle+spins*2*Math.PI+Math.random()*2*Math.PI; // random landing
+  // --- total turns come from the area under your rev/sec curve ---
+  const turns=SPIN_DENOM*(0.97+Math.random()*0.06);                // your designed turns, ±3% variance
+  const target=wheelAngle+turns*2*Math.PI+Math.random()*2*Math.PI; // + random landing spot
   const start=wheelAngle;
-  const dur=SPIN_CURVE.tEnd*1000*(0.9+Math.random()*0.2);          // ±10% duration jitter
+  const dur=SPIN_CURVE.tEnd*1000*(0.97+Math.random()*0.06);        // ±3% duration jitter (keeps your rev/sec honest)
   const t0=performance.now();
   (function frame(t){
     const p=Math.min(1,(t-t0)/dur);
