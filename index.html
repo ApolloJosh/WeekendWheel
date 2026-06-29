@@ -208,7 +208,13 @@ canvas#wheel{width:100%;height:100%;border-radius:50%;
 .editrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 0;border-bottom:1px solid var(--line)}
 .editrow .en-name{font-family:'Bitter';font-weight:600;min-width:150px;flex:1 1 150px}
 .editrow .en-name small{font-family:'Saira Condensed';color:#5a4a2a;font-weight:600;letter-spacing:.04em}
-.editrow .en-new{min-width:150px;font-size:15px;padding:7px 10px}
+.editrow .en-new{min-width:130px;font-size:15px;padding:7px 10px}
+.editrow .en-check{width:20px;height:20px;flex:0 0 auto;cursor:pointer;accent-color:var(--orange-deep)}
+.editrow.checked{background:rgba(244,100,30,.10)}
+.mergebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--cream2);
+  border:2px solid var(--ink);border-radius:5px;padding:10px 12px;margin-bottom:12px;
+  font-family:'Saira Condensed';font-weight:700;letter-spacing:.04em}
+.mergebar select{font-family:'Bitter';font-weight:400;font-size:15px;padding:6px 8px;border:2px solid var(--ink);border-radius:4px}
 
 .demo-flag{background:var(--gold);color:#3a2a00;border:2px solid var(--ink);text-align:center;
   font-family:'Saira Condensed';font-weight:700;letter-spacing:.08em;font-size:13px;padding:7px}
@@ -426,7 +432,13 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
     <div class="card">
       <div class="eyebrow">Edit Standings</div>
       <h2>Combine or Remove Names</h2>
-      <p class="small">Fix a typo, merge two people (type an existing name to combine them), or delete an entry. Changes apply across every week and the wheel.</p>
+      <p class="small">Check the names you want to combine and hit Merge. Use Rename to fix a single typo, or Delete to remove someone. Changes apply across every week and the wheel.</p>
+      <div id="mergeBar" class="mergebar hidden">
+        <span><b id="mergeCount">0</b> selected · keep as:</span>
+        <select id="mergeTarget"></select>
+        <button class="btn sm" id="doMerge">Merge Selected</button>
+        <button class="btn ghost sm" id="clearSel">Clear</button>
+      </div>
       <div id="standingsEditor"><p class="small">Loading…</p></div>
       <div class="msg" id="editMsg"></div>
       <button class="btn ghost sm" id="refreshEditor" style="margin-top:10px">Refresh List</button>
@@ -847,12 +859,41 @@ async function renderStandingsEditor(){
   const rows=Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
   $('standingsEditor').innerHTML = rows.length ? rows.map(r=>`
     <div class="editrow">
+      <input type="checkbox" class="en-check" data-name="${esc(r.name)}" title="Select to merge">
       <span class="en-name">${esc(r.name)} <small>(${r.correct} correct · ${r.wins}★)</small></span>
-      <input class="en-new" placeholder="rename / merge into…" data-name="${esc(r.name)}">
-      <button class="btn sm en-rename" data-name="${esc(r.name)}">Save</button>
+      <input class="en-new" placeholder="rename to…" data-name="${esc(r.name)}">
+      <button class="btn sm en-rename" data-name="${esc(r.name)}">Rename</button>
       <button class="btn ghost sm en-del" data-name="${esc(r.name)}">Delete</button>
     </div>`).join('') : '<p class="small">No names yet.</p>';
+  updateMergeBar();
 }
+/* merge-by-checkbox */
+function checkedNames(){return [...document.querySelectorAll('.en-check:checked')].map(c=>c.dataset.name);}
+function updateMergeBar(){
+  const names=checkedNames();
+  document.querySelectorAll('.en-check').forEach(c=>c.closest('.editrow').classList.toggle('checked',c.checked));
+  $('mergeCount').textContent=names.length;
+  $('mergeBar').classList.toggle('hidden',names.length<2);
+  if(names.length>=2){
+    const tgt=$('mergeTarget');const prev=tgt.value;
+    tgt.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    if(names.includes(prev))tgt.value=prev;
+  }
+}
+$('standingsEditor').addEventListener('change',e=>{if(e.target.classList.contains('en-check'))updateMergeBar();});
+$('clearSel').addEventListener('click',()=>{document.querySelectorAll('.en-check').forEach(c=>c.checked=false);updateMergeBar();});
+$('doMerge').addEventListener('click',async()=>{
+  const m=$('editMsg');const names=checkedNames();const target=$('mergeTarget').value;
+  if(names.length<2){m.className='msg err';m.textContent='Select at least two names.';return;}
+  const losers=names.filter(n=>n!==target);
+  if(!confirm('Merge '+losers.join(', ')+' into “'+target+'”? Their correct picks and wins move to '+target+'.'))return;
+  m.className='msg';m.textContent='Merging…';
+  try{
+    for(const n of losers) await db.renameEntrant(n,target);
+    m.className='msg ok';m.textContent='Merged '+names.length+' names into “'+target+'”.';
+    renderStandingsEditor();
+  }catch(err){m.className='msg err';m.textContent='Merge failed.';console.error(err);}
+});
 $('standingsEditor').addEventListener('click',async e=>{
   const m=$('editMsg');
   const ren=e.target.closest('.en-rename');
