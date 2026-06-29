@@ -200,6 +200,16 @@ canvas#wheel{width:100%;height:100%;border-radius:50%;
 .pill{display:inline-block;font-family:'Saira Condensed';font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px;border-radius:20px;border:2px solid var(--ink)}
 .pill.open{background:#bfe6c4}.pill.closed{background:var(--gold)}.pill.finalized{background:var(--cream2)}
 
+/* confetti + winner pop */
+.confp{position:absolute;width:10px;height:14px;border-radius:2px;pointer-events:none;z-index:9;top:42%;left:50%}
+.winner-banner.pop{animation:pop .5s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+/* standings editor */
+.editrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 0;border-bottom:1px solid var(--line)}
+.editrow .en-name{font-family:'Bitter';font-weight:600;min-width:150px;flex:1 1 150px}
+.editrow .en-name small{font-family:'Saira Condensed';color:#5a4a2a;font-weight:600;letter-spacing:.04em}
+.editrow .en-new{min-width:150px;font-size:15px;padding:7px 10px}
+
 .demo-flag{background:var(--gold);color:#3a2a00;border:2px solid var(--ink);text-align:center;
   font-family:'Saira Condensed';font-weight:700;letter-spacing:.08em;font-size:13px;padding:7px}
 footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-transform:uppercase;
@@ -411,6 +421,16 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
       </div>
       <div class="msg" id="manualMsg"></div>
     </div>
+
+    <!-- edit standings -->
+    <div class="card">
+      <div class="eyebrow">Edit Standings</div>
+      <h2>Combine or Remove Names</h2>
+      <p class="small">Fix a typo, merge two people (type an existing name to combine them), or delete an entry. Changes apply across every week and the wheel.</p>
+      <div id="standingsEditor"><p class="small">Loading…</p></div>
+      <div class="msg" id="editMsg"></div>
+      <button class="btn ghost sm" id="refreshEditor" style="margin-top:10px">Refresh List</button>
+    </div>
   </div>
 </section>
 
@@ -535,6 +555,51 @@ const db = {
   async addWinner(weekId,name){
     if(!LIVE){demo.winners.unshift({id:demo._sid++,week_id:weekId,name});return;}
     const {error}=await sb.from('winners').insert({week_id:weekId,name}); if(error)throw error;
+  },
+  /* rename a person everywhere; if newName already exists they merge */
+  async renameEntrant(oldName,newName){
+    const lo=oldName.trim().toLowerCase();
+    if(!LIVE){
+      demo.winners.forEach(w=>{if(w.name.toLowerCase()===lo)w.name=newName;});
+      const newByWeek={};
+      demo.submissions.forEach(s=>{if(s.name.toLowerCase()===newName.toLowerCase())newByWeek[s.week_id]=s;});
+      demo.submissions=demo.submissions.filter(s=>{
+        if(s.name.toLowerCase()===lo){
+          const dup=newByWeek[s.week_id];
+          if(dup){ if(s.is_correct)dup.is_correct=true; return false; } // merge into existing, drop old
+          s.name=newName;                                              // simple rename
+        }
+        return true;
+      });
+      return;
+    }
+    // winners: straight rename (no unique constraint)
+    const {data:wn}=await sb.from('winners').select('id').ilike('name',oldName);
+    for(const w of (wn||[])) await sb.from('winners').update({name:newName}).eq('id',w.id);
+    // submissions: handle per-week uniqueness when merging
+    const {data:olds}=await sb.from('submissions').select('*').ilike('name',oldName);
+    const {data:news}=await sb.from('submissions').select('*').ilike('name',newName);
+    const newByWeek={};(news||[]).forEach(s=>newByWeek[s.week_id]=s);
+    for(const s of (olds||[])){
+      const dup=newByWeek[s.week_id];
+      if(dup){
+        if(s.is_correct && !dup.is_correct) await sb.from('submissions').update({is_correct:true}).eq('id',dup.id);
+        await sb.from('submissions').delete().eq('id',s.id);
+      } else {
+        await sb.from('submissions').update({name:newName}).eq('id',s.id);
+      }
+    }
+  },
+  /* remove a person from every week + the winners hall */
+  async deleteEntrant(name){
+    if(!LIVE){
+      const lo=name.trim().toLowerCase();
+      demo.submissions=demo.submissions.filter(s=>s.name.toLowerCase()!==lo);
+      demo.winners=demo.winners.filter(w=>w.name.toLowerCase()!==lo);
+      return;
+    }
+    await sb.from('submissions').delete().ilike('name',name);
+    await sb.from('winners').delete().ilike('name',name);
   }
 };
 
@@ -701,19 +766,21 @@ async function initWheelView(){
   $('recordWinBtn').classList.toggle('hidden',!isAdmin);
   drawWheel();
 }
+// fast launch, dramatic settle with a tiny overshoot "back" at the end
+function easeOutBack(p){const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(p-1,3)+c1*Math.pow(p-1,2);}
 $('spinBtn').addEventListener('click',()=>{
   if(spinning||wheelNames.length===0)return;
-  spinning=true;$('wheelWinner').textContent='';
-  const spins=5+Math.random()*3;
+  spinning=true;$('wheelWinner').textContent='';$('recordWinBtn').classList.add('hidden');
+  const hub=document.querySelector('.hub');if(hub)hub.textContent='…';
+  const spins=10+Math.random()*4;                          // 10–14 full turns
   const target=wheelAngle+spins*2*Math.PI+Math.random()*2*Math.PI;
-  const start=wheelAngle,dur=4200+Math.random()*900,t0=performance.now();
+  const start=wheelAngle,dur=3000+Math.random()*500,t0=performance.now();   // faster
   (function frame(t){
     const p=Math.min(1,(t-t0)/dur);
-    const e=1-Math.pow(1-p,3); // ease-out cubic
-    wheelAngle=start+(target-start)*e;
+    wheelAngle=start+(target-start)*easeOutBack(p);
     drawWheel();
     if(p<1)requestAnimationFrame(frame);
-    else{spinning=false;announceWinner();}
+    else{wheelAngle=target;drawWheel();spinning=false;if(hub)hub.textContent='SPIN';announceWinner();}
   })(t0);
 });
 function announceWinner(){
@@ -722,8 +789,28 @@ function announceWinner(){
   const norm=((1.5*Math.PI - wheelAngle)% (2*Math.PI)+2*Math.PI)%(2*Math.PI);
   const idx=Math.floor(norm/seg)%n;
   const win=wheelNames[idx];
-  $('wheelWinner').innerHTML='Winner: <b>'+esc(win)+'</b> ★';
+  const b=$('wheelWinner');
+  b.innerHTML='Winner: <b>'+esc(win)+'</b> ★';
+  b.classList.remove('pop');void b.offsetWidth;b.classList.add('pop');  // retrigger pop
   $('recordWinBtn').dataset.name=win;
+  $('recordWinBtn').classList.toggle('hidden',!isAdmin);
+  confetti();
+}
+function confetti(){
+  const stage=document.querySelector('.wheel-box');if(!stage)return;
+  const colors=['#06294f','#f4641e','#f7b32b','#f3ead6','#0a3a6e','#d9521a'];
+  for(let i=0;i<70;i++){
+    const d=document.createElement('div');d.className='confp';
+    d.style.background=colors[i%colors.length];stage.appendChild(d);
+    const ang=Math.random()*2*Math.PI,vel=5+Math.random()*9;
+    let vx=Math.cos(ang)*vel,vy=Math.sin(ang)*vel-7,x=0,y=0,rot=Math.random()*360,t=0;
+    (function fall(){
+      t++;vy+=0.35;x+=vx;y+=vy;rot+=14;
+      d.style.transform=`translate(${x}px,${y}px) rotate(${rot}deg)`;
+      d.style.opacity=Math.max(0,1-t/95);
+      if(t<95)requestAnimationFrame(fall);else d.remove();
+    })();
+  }
 }
 $('recordWinBtn').addEventListener('click',async()=>{
   const name=$('recordWinBtn').dataset.name;if(!name)return;
@@ -750,7 +837,46 @@ async function fillAdmin(){
   $('subState').textContent=wk.status==='open'?'open':'closed';
   $('toggleSubs').textContent=wk.status==='open'?'Close Submissions':'Re-open Submissions';
   refreshNamePull(wk.id);
+  renderStandingsEditor();
 }
+async function renderStandingsEditor(){
+  const [correct,wins]=await Promise.all([db.allCorrect(),db.winners()]);
+  const map={};
+  correct.forEach(s=>{const k=s.name.trim();(map[k]=map[k]||{name:k,correct:0,wins:0}).correct++;});
+  wins.forEach(w=>{const k=w.name.trim();(map[k]=map[k]||{name:k,correct:0,wins:0}).wins++;});
+  const rows=Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
+  $('standingsEditor').innerHTML = rows.length ? rows.map(r=>`
+    <div class="editrow">
+      <span class="en-name">${esc(r.name)} <small>(${r.correct} correct · ${r.wins}★)</small></span>
+      <input class="en-new" placeholder="rename / merge into…" data-name="${esc(r.name)}">
+      <button class="btn sm en-rename" data-name="${esc(r.name)}">Save</button>
+      <button class="btn ghost sm en-del" data-name="${esc(r.name)}">Delete</button>
+    </div>`).join('') : '<p class="small">No names yet.</p>';
+}
+$('standingsEditor').addEventListener('click',async e=>{
+  const m=$('editMsg');
+  const ren=e.target.closest('.en-rename');
+  const del=e.target.closest('.en-del');
+  if(ren){
+    const name=ren.dataset.name;
+    const nw=ren.parentElement.querySelector('.en-new').value.trim();
+    if(!nw){m.className='msg err';m.textContent='Type a name to rename/merge into first.';return;}
+    if(nw.toLowerCase()===name.toLowerCase()){m.className='msg err';m.textContent='That is the same name.';return;}
+    m.className='msg';m.textContent='Working…';
+    try{await db.renameEntrant(name,nw);
+      m.className='msg ok';m.textContent='“'+name+'” → “'+nw+'” updated.';renderStandingsEditor();}
+    catch(err){m.className='msg err';m.textContent='Update failed.';console.error(err);}
+  }
+  if(del){
+    const name=del.dataset.name;
+    if(!confirm('Delete “'+name+'” from all standings? This removes their correct picks and any wheel wins.'))return;
+    m.className='msg';m.textContent='Working…';
+    try{await db.deleteEntrant(name);
+      m.className='msg ok';m.textContent='“'+name+'” removed.';renderStandingsEditor();}
+    catch(err){m.className='msg err';m.textContent='Delete failed.';console.error(err);}
+  }
+});
+$('refreshEditor').addEventListener('click',renderStandingsEditor);
 async function refreshNamePull(weekId){
   const subs=await db.submissions(weekId);
   const names=subs.filter(s=>s.is_correct).map(s=>s.name);
