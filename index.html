@@ -443,6 +443,15 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
       <div class="msg" id="editMsg"></div>
       <button class="btn ghost sm" id="refreshEditor" style="margin-top:10px">Refresh List</button>
     </div>
+
+    <!-- edit past winners -->
+    <div class="card">
+      <div class="eyebrow">Edit Past Winners</div>
+      <h2>Fix the Champions</h2>
+      <p class="small">Rename or delete any past wheel winner. This only changes the Winners hall and the ★ wins in the standings.</p>
+      <div id="winnersEditor"><p class="small">Loading…</p></div>
+      <div class="msg" id="winEditMsg"></div>
+    </div>
   </div>
 </section>
 
@@ -612,6 +621,15 @@ const db = {
     }
     await sb.from('submissions').delete().ilike('name',name);
     await sb.from('winners').delete().ilike('name',name);
+  },
+  /* edit a single past wheel-winner record */
+  async updateWinner(id,name){
+    if(!LIVE){const w=demo.winners.find(w=>w.id===id);if(w)w.name=name;return;}
+    const {error}=await sb.from('winners').update({name}).eq('id',id);if(error)throw error;
+  },
+  async deleteWinner(id){
+    if(!LIVE){demo.winners=demo.winners.filter(w=>w.id!==id);return;}
+    const {error}=await sb.from('winners').delete().eq('id',id);if(error)throw error;
   }
 };
 
@@ -735,76 +753,102 @@ async function renderWinners(){
    ===================================================================== */
 const cv=$('wheel'),ctx=cv.getContext('2d');
 let wheelAngle=0,spinning=false;
+let segments=[];                 // [{label, again}]  built from wheelNames + Spin Again wedges
 const palette=['#06294f','#f4641e','#0a3a6e','#f59423','#123e6e','#d9521a'];
+const AGAIN_FILL='#f7b32b';      // gold for the Spin Again wedges
+
+// Build wheel segments: real names + 1 Spin Again, plus 1 more per 5 names, spaced evenly.
+function rebuildSegments(){
+  const people=wheelNames.slice();
+  const extra = people.length ? 1+Math.floor(people.length/5) : 0;
+  const L=people.length+extra;
+  const againAt=new Set();
+  for(let j=0;j<extra;j++) againAt.add(Math.floor((j+1)*L/(extra+1)));
+  segments=[];let pi=0;
+  for(let i=0;i<L;i++){
+    if(againAt.has(i)) segments.push({label:'SPIN AGAIN',again:true});
+    else if(pi<people.length) segments.push({label:people[pi++],again:false});
+  }
+  while(pi<people.length) segments.push({label:people[pi++],again:false}); // safety
+}
+function setWheelNames(arr){wheelNames=arr.slice();rebuildSegments();drawWheel();}
+
 function drawWheel(){
-  const n=wheelNames.length, R=cv.width/2, cx=R, cy=R;
+  const n=segments.length, R=cv.width/2, cx=R, cy=R;
   ctx.clearRect(0,0,cv.width,cv.height);
   if(n===0){
     ctx.fillStyle='#0a3a6e';ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.fill();
     ctx.fillStyle='#f3ead6';ctx.font="bold 26px 'Saira Condensed',sans-serif";ctx.textAlign='center';
     ctx.fillText('No names loaded',cx,cy);return;
   }
-  const seg=2*Math.PI/n;
+  const seg=2*Math.PI/n;let pIdx=0;
   for(let i=0;i<n;i++){
-    const a0=wheelAngle+i*seg, a1=a0+seg;
+    const s=segments[i];const a0=wheelAngle+i*seg, a1=a0+seg;
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,a0,a1);ctx.closePath();
-    ctx.fillStyle=palette[i%palette.length];ctx.fill();
+    ctx.fillStyle = s.again ? AGAIN_FILL : palette[pIdx++ % palette.length];ctx.fill();
     ctx.strokeStyle='rgba(243,234,214,.6)';ctx.lineWidth=2;ctx.stroke();
-    // label
     ctx.save();ctx.translate(cx,cy);ctx.rotate(a0+seg/2);
-    ctx.textAlign='right';ctx.fillStyle='#f3ead6';
-    const fs=Math.max(13,Math.min(26,520/n));
-    ctx.font=`700 ${fs}px 'Saira Condensed',sans-serif`;
-    ctx.fillText(wheelNames[i],R-18,fs/3);
+    ctx.textAlign='right';
+    const fs=Math.max(12,Math.min(26,520/n));
+    if(s.again){
+      ctx.fillStyle='#2a1402';ctx.font=`800 ${Math.max(11,fs-2)}px 'Saira Condensed',sans-serif`;
+      ctx.fillText('↻ SPIN AGAIN',R-16,fs/3);
+    }else{
+      ctx.fillStyle='#f3ead6';ctx.font=`700 ${fs}px 'Saira Condensed',sans-serif`;
+      ctx.fillText(s.label,R-18,fs/3);
+    }
     ctx.restore();
   }
-  // outer ring accents
   ctx.beginPath();ctx.arc(cx,cy,R-1,0,7);ctx.strokeStyle='#1d1407';ctx.lineWidth=4;ctx.stroke();
 }
 async function initWheelView(){
-  // default: load correct names from most recent finalized week if wheel empty
   if(wheelNames.length===0){
     const weeks=await db.weeks();
     const fin=weeks.filter(w=>w.status==='finalized').slice(-1)[0];
     if(fin){
       const subs=await db.submissions(fin.id);
-      wheelNames=subs.filter(s=>s.is_correct).map(s=>s.name);
+      setWheelNames(subs.filter(s=>s.is_correct).map(s=>s.name));
       $('wheelSrc').textContent='Showing correct names from '+fin.label;
     }
   }
   $('wheelHelp').textContent= isAdmin
-    ? 'Names come from the graded week. Spin, then record the winner.'
+    ? 'Names come from the graded week. Land on a gold ↻ wedge and just spin again.'
     : 'Tune in Monday — the host spins this live!';
   $('recordWinBtn').classList.toggle('hidden',!isAdmin);
   drawWheel();
 }
-// fast launch, dramatic settle with a tiny overshoot "back" at the end
-function easeOutBack(p){const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(p-1,3)+c1*Math.pow(p-1,2);}
+// forward-only, hard & dramatic: long fast spin that decelerates without ever reversing
+function easeOutQuint(p){return 1-Math.pow(1-p,5);}
 $('spinBtn').addEventListener('click',()=>{
-  if(spinning||wheelNames.length===0)return;
+  if(spinning||segments.length===0)return;
   spinning=true;$('wheelWinner').textContent='';$('recordWinBtn').classList.add('hidden');
   const hub=document.querySelector('.hub');if(hub)hub.textContent='…';
-  const spins=10+Math.random()*4;                          // 10–14 full turns
+  const spins=15+Math.random()*5;                              // 15–20 full turns (harder)
   const target=wheelAngle+spins*2*Math.PI+Math.random()*2*Math.PI;
-  const start=wheelAngle,dur=3000+Math.random()*500,t0=performance.now();   // faster
+  const start=wheelAngle,dur=6000+Math.random()*1500,t0=performance.now();   // longer (6–7.5s)
   (function frame(t){
     const p=Math.min(1,(t-t0)/dur);
-    wheelAngle=start+(target-start)*easeOutBack(p);
+    wheelAngle=start+(target-start)*easeOutQuint(p);          // monotonic — never spins backward
     drawWheel();
     if(p<1)requestAnimationFrame(frame);
     else{wheelAngle=target;drawWheel();spinning=false;if(hub)hub.textContent='SPIN';announceWinner();}
   })(t0);
 });
 function announceWinner(){
-  const n=wheelNames.length,seg=2*Math.PI/n;
+  const n=segments.length,seg=2*Math.PI/n;
   // pointer at top = -90deg = 1.5π. find segment under it.
   const norm=((1.5*Math.PI - wheelAngle)% (2*Math.PI)+2*Math.PI)%(2*Math.PI);
   const idx=Math.floor(norm/seg)%n;
-  const win=wheelNames[idx];
+  const s=segments[idx];
   const b=$('wheelWinner');
-  b.innerHTML='Winner: <b>'+esc(win)+'</b> ★';
   b.classList.remove('pop');void b.offsetWidth;b.classList.add('pop');  // retrigger pop
-  $('recordWinBtn').dataset.name=win;
+  if(s.again){
+    b.innerHTML='↻ <b>SPIN AGAIN!</b>';
+    $('recordWinBtn').classList.add('hidden');
+    return;                       // not a winner — just go again
+  }
+  b.innerHTML='Winner: <b>'+esc(s.label)+'</b> ★';
+  $('recordWinBtn').dataset.name=s.label;
   $('recordWinBtn').classList.toggle('hidden',!isAdmin);
   confetti();
 }
@@ -850,7 +894,35 @@ async function fillAdmin(){
   $('toggleSubs').textContent=wk.status==='open'?'Close Submissions':'Re-open Submissions';
   refreshNamePull(wk.id);
   renderStandingsEditor();
+  renderWinnersEditor();
 }
+async function renderWinnersEditor(){
+  const [wins,weeks]=await Promise.all([db.winners(),db.weeks()]);
+  $('winnersEditor').innerHTML = wins.length ? wins.map(w=>`
+    <div class="editrow">
+      <span class="en-name">${esc(weekLabelById(w.week_id,weeks)||'Week')}</span>
+      <input class="wn-name" value="${esc(w.name)}" data-id="${w.id}">
+      <button class="btn sm wn-save" data-id="${w.id}">Save</button>
+      <button class="btn ghost sm wn-del" data-id="${w.id}">Delete</button>
+    </div>`).join('') : '<p class="small">No winners yet.</p>';
+}
+$('winnersEditor').addEventListener('click',async e=>{
+  const m=$('winEditMsg');
+  const save=e.target.closest('.wn-save');const del=e.target.closest('.wn-del');
+  if(save){
+    const id=Number(save.dataset.id);
+    const val=save.parentElement.querySelector('.wn-name').value.trim();
+    if(!val){m.className='msg err';m.textContent='Name cannot be empty.';return;}
+    try{await db.updateWinner(id,val);m.className='msg ok';m.textContent='Saved.';renderWinnersEditor();}
+    catch(err){m.className='msg err';m.textContent='Save failed.';console.error(err);}
+  }
+  if(del){
+    const id=Number(del.dataset.id);
+    if(!confirm('Delete this winner record?'))return;
+    try{await db.deleteWinner(id);m.className='msg ok';m.textContent='Deleted.';renderWinnersEditor();}
+    catch(err){m.className='msg err';m.textContent='Delete failed.';console.error(err);}
+  }
+});
 async function renderStandingsEditor(){
   const [correct,wins]=await Promise.all([db.allCorrect(),db.winners()]);
   const map={};
@@ -994,9 +1066,10 @@ $('copyNames').addEventListener('click',()=>{
     $('gradeMsg').className='msg ok';$('gradeMsg').textContent='Copied!';});
 });
 $('loadWheel').addEventListener('click',()=>{
-  wheelNames=JSON.parse($('namePull').dataset.names||'[]');
-  if(!wheelNames.length){$('gradeMsg').className='msg err';$('gradeMsg').textContent='No correct names yet.';return;}
-  $('wheelSrc').textContent='Loaded '+wheelNames.length+' correct names.';
+  const names=JSON.parse($('namePull').dataset.names||'[]');
+  if(!names.length){$('gradeMsg').className='msg err';$('gradeMsg').textContent='No correct names yet.';return;}
+  setWheelNames(names);
+  $('wheelSrc').textContent='Loaded '+names.length+' correct names.';
   document.querySelector('[data-view="wheel"]').click();
 });
 /* manual */
