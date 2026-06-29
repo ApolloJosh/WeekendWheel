@@ -449,7 +449,7 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
     <div class="card">
       <div class="eyebrow">Edit Past Winners</div>
       <h2>Fix the Champions</h2>
-      <p class="small">Edit the date/label, rename, or delete any past winner. The date is that week's label, so it also updates wherever the week is shown.</p>
+      <p class="small">Edit the date/label, rename, or delete any past winner. Each winner is fully independent — editing one never changes another.</p>
       <div id="winnersEditor"><p class="small">Loading…</p></div>
       <div class="msg" id="winEditMsg"></div>
     </div>
@@ -488,8 +488,8 @@ const demo = {
   ],
   submissions: [],
   winners: [
-    {id:1,week_id:2,name:'Chrispy'},
-    {id:2,week_id:1,name:'Nolberto'}
+    {id:1,week_id:2,name:'Chrispy',label:'Weekend of 6/15'},
+    {id:2,week_id:1,name:'Nolberto',label:'Weekend of 6/5'}
   ],
   _sid: 100
 };
@@ -574,9 +574,9 @@ const db = {
       await sb.from('submissions').update({is_correct:true}).eq('week_id',weekId).ilike('name',name);
     } else if(error) throw error;
   },
-  async addWinner(weekId,name){
-    if(!LIVE){demo.winners.unshift({id:demo._sid++,week_id:weekId,name});return;}
-    const {error}=await sb.from('winners').insert({week_id:weekId,name}); if(error)throw error;
+  async addWinner(weekId,name,label){
+    if(!LIVE){demo.winners.unshift({id:demo._sid++,week_id:weekId,name,label:label||null});return;}
+    const {error}=await sb.from('winners').insert({week_id:weekId,name,label:label||null}); if(error)throw error;
   },
   /* rename a person everywhere; if newName already exists they merge */
   async renameEntrant(oldName,newName){
@@ -623,10 +623,10 @@ const db = {
     await sb.from('submissions').delete().ilike('name',name);
     await sb.from('winners').delete().ilike('name',name);
   },
-  /* edit a single past wheel-winner record */
-  async updateWinner(id,name){
-    if(!LIVE){const w=demo.winners.find(w=>w.id===id);if(w)w.name=name;return;}
-    const {error}=await sb.from('winners').update({name}).eq('id',id);if(error)throw error;
+  /* edit a single past wheel-winner record (fully independent of any week) */
+  async updateWinner(id,patch){
+    if(!LIVE){const w=demo.winners.find(w=>w.id===id);if(w)Object.assign(w,patch);return;}
+    const {error}=await sb.from('winners').update(patch).eq('id',id);if(error)throw error;
   },
   async deleteWinner(id){
     if(!LIVE){demo.winners=demo.winners.filter(w=>w.id!==id);return;}
@@ -744,7 +744,7 @@ async function renderStandings(){
 async function renderWinners(){
   const [wins,weeks]=await Promise.all([db.winners(),db.weeks()]);
   $('hall').innerHTML=wins.map(w=>`
-    <div class="ticket"><div class="wk">${esc(weekLabelById(w.week_id,weeks)||'Week')}</div>
+    <div class="ticket"><div class="wk">${esc(w.label||weekLabelById(w.week_id,weeks)||'Week')}</div>
     <div class="who">${esc(w.name)}</div><div class="tag">Wheel Champion ★</div></div>`).join('')
     || `<p class="small center">No winners recorded yet.</p>`;
 }
@@ -818,24 +818,39 @@ async function initWheelView(){
   $('recordWinBtn').classList.toggle('hidden',!isAdmin);
   drawWheel();
 }
-// forward-only & dramatic: a fast steady cruise, then a long slow brake that
-// ticks down name-by-name before it finally lands. Monotonic — never reverses.
-function spinEase(p){
-  const c=0.60, d=0.84;            // cruise for 60% of time covering 84% of the distance…
-  if(p<=c) return d*(p/c);         // …at a steady fast pace,
-  const q=(p-c)/(1-c);             // then a long ease-out brake through the final stretch
-  return d+(1-d)*(1-Math.pow(1-q,3));
+// Spin speed profile (designed on the curve editor). X = seconds, Y = speed 0-100.
+// Because speed is never negative, the integral below is always increasing →
+// the wheel only ever moves forward and lands exactly on a segment.
+const SPEED_PTS=[{t:0,v:39},{t:0.18,v:90},{t:0.84,v:100},{t:3.05,v:97},{t:3.77,v:82},{t:5.72,v:52},{t:7.36,v:25},{t:8.59,v:11},{t:10.23,v:3},{t:15,v:0}];
+function buildCurve(pts){
+  const cum=[0];let A=0;
+  for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];A+=(a.v+b.v)/2*(b.t-a.t);cum.push(A);}
+  const targ=0.995*A;let tEnd=pts[pts.length-1].t;        // trim any near-zero dead tail
+  for(let i=1;i<cum.length;i++){if(cum[i]>=targ){const a=pts[i-1],b=pts[i],c0=cum[i-1],c1=cum[i];
+    tEnd=a.t+(b.t-a.t)*((targ-c0)/((c1-c0)||1));break;}}
+  return {pts,cum,A,tEnd};
 }
+function cumAt(c,t){const{pts,cum}=c;if(t<=pts[0].t)return 0;
+  for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];
+    if(t<=b.t){const vt=a.v+(b.v-a.v)*((t-a.t)/((b.t-a.t)||1));return cum[i]+(a.v+vt)/2*(t-a.t);}}
+  return cum[cum.length-1];}
+const SPIN_CURVE=buildCurve(SPEED_PTS);
+const SPIN_DENOM=cumAt(SPIN_CURVE,SPIN_CURVE.tEnd);
+function spinEase(p){return cumAt(SPIN_CURVE,p*SPIN_CURVE.tEnd)/SPIN_DENOM;}  // 0→1, lands exactly at 1
+
 $('spinBtn').addEventListener('click',()=>{
   if(spinning||segments.length===0)return;
   spinning=true;$('wheelWinner').textContent='';$('recordWinBtn').classList.add('hidden');
   const hub=document.querySelector('.hub');if(hub)hub.textContent='…';
-  const spins=18+Math.random()*6;                              // 18–24 full turns
-  const target=wheelAngle+spins*2*Math.PI+Math.random()*2*Math.PI;
-  const start=wheelAngle,dur=11000+Math.random()*3000,t0=performance.now();   // 11–14s, long dramatic finish
+  // --- per-spin random variance so it never feels the same twice ---
+  const spins=18+Math.random()*8;                                  // 18–26 full turns
+  const target=wheelAngle+spins*2*Math.PI+Math.random()*2*Math.PI; // random landing
+  const start=wheelAngle;
+  const dur=SPIN_CURVE.tEnd*1000*(0.9+Math.random()*0.2);          // ±10% duration jitter
+  const t0=performance.now();
   (function frame(t){
     const p=Math.min(1,(t-t0)/dur);
-    wheelAngle=start+(target-start)*spinEase(p);              // monotonic — never spins backward
+    wheelAngle=start+(target-start)*spinEase(p);                   // follows your speed curve
     drawWheel();
     if(p<1)requestAnimationFrame(frame);
     else{wheelAngle=target;drawWheel();spinning=false;if(hub)hub.textContent='SPIN';announceWinner();}
@@ -879,7 +894,7 @@ $('recordWinBtn').addEventListener('click',async()=>{
   const name=$('recordWinBtn').dataset.name;if(!name)return;
   const weeks=await db.weeks();
   const wk=weeks.filter(w=>w.status==='finalized').slice(-1)[0]||weeks.slice(-1)[0];
-  try{await db.addWinner(wk.id,name);$('wheelWinner').innerHTML='Recorded: <b>'+esc(name)+'</b> ★ — see Winners tab!';}
+  try{await db.addWinner(wk.id,name,wk.label);$('wheelWinner').innerHTML='Recorded: <b>'+esc(name)+'</b> ★ — see Winners tab!';}
   catch(e){$('wheelWinner').textContent='Could not record — try the Admin tab.';console.error(e);}
 });
 
@@ -907,9 +922,9 @@ async function renderWinnersEditor(){
   const [wins,weeks]=await Promise.all([db.winners(),db.weeks()]);
   $('winnersEditor').innerHTML = wins.length ? wins.map(w=>`
     <div class="editrow">
-      <input class="wn-date" value="${esc(weekLabelById(w.week_id,weeks)||'')}" placeholder="date / label">
+      <input class="wn-date" value="${esc(w.label||weekLabelById(w.week_id,weeks)||'')}" placeholder="date / label">
       <input class="wn-name" value="${esc(w.name)}">
-      <button class="btn sm wn-save" data-id="${w.id}" data-week="${w.week_id}">Save</button>
+      <button class="btn sm wn-save" data-id="${w.id}">Save</button>
       <button class="btn ghost sm wn-del" data-id="${w.id}">Delete</button>
     </div>`).join('') : '<p class="small">No winners yet.</p>';
 }
@@ -917,14 +932,13 @@ $('winnersEditor').addEventListener('click',async e=>{
   const m=$('winEditMsg');
   const save=e.target.closest('.wn-save');const del=e.target.closest('.wn-del');
   if(save){
-    const id=Number(save.dataset.id);const weekId=Number(save.dataset.week);
+    const id=Number(save.dataset.id);
     const row=save.parentElement;
     const name=row.querySelector('.wn-name').value.trim();
     const date=row.querySelector('.wn-date').value.trim();
     if(!name){m.className='msg err';m.textContent='Name cannot be empty.';return;}
     try{
-      await db.updateWinner(id,name);
-      if(date) await db.updateWeek(weekId,{label:date});  // the date IS that week's label
+      await db.updateWinner(id,{name,label:date||null});   // independent — touches only this winner
       m.className='msg ok';m.textContent='Saved.';
       renderWinnersEditor();
     }catch(err){m.className='msg err';m.textContent='Save failed.';console.error(err);}
@@ -1093,7 +1107,7 @@ $('addCorrectBtn').addEventListener('click',async()=>{
 });
 $('addWinnerBtn').addEventListener('click',async()=>{
   const wk=await db.openWeek();const n=$('addWinnerName').value.trim();if(!n)return;
-  await db.addWinner(wk.id,n);$('addWinnerName').value='';
+  await db.addWinner(wk.id,n,wk.label);$('addWinnerName').value='';
   $('manualMsg').className='msg ok';$('manualMsg').textContent=n+' recorded as a winner.';
 });
 
