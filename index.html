@@ -821,7 +821,7 @@ async function initWheelView(){
 // Spin speed profile (designed on the curve editor). X = seconds, Y = speed 0-100.
 // Because speed is never negative, the integral below is always increasing →
 // the wheel only ever moves forward and lands exactly on a segment.
-const SPEED_PTS=[{t:0,v:3.1},{t:0.18,v:7.2},{t:0.32,v:13.46},{t:1.94,v:15},{t:3.94,v:13},{t:5.92,v:8.42},{t:7.51,v:4.67},{t:8.32,v:3.2},{t:9.35,v:1.72},{t:10.15,v:0.9},{t:11.42,v:0.38},{t:15,v:0}];  // Y = revolutions/second; area = total turns
+const SPEED_PTS=[{t:0,v:3.1},{t:0.18,v:7.2},{t:0.32,v:13.46},{t:1.94,v:15},{t:3.94,v:13},{t:5.92,v:8.42},{t:7.51,v:4.67},{t:8.32,v:3.2},{t:9.76,v:1.81},{t:11.27,v:0.93},{t:13.55,v:0.34},{t:21.85,v:0}];  // Y = revolutions/second; area = total turns
 function buildCurve(pts){
   const cum=[0];let A=0;
   for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];A+=(a.v+b.v)/2*(b.t-a.t);cum.push(A);}
