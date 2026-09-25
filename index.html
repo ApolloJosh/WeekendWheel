@@ -264,8 +264,8 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
     <div class="eyebrow">Make Your Call</div>
     <h2>Lock In Your Pick</h2>
     <div class="ou-wrap">
-      <button class="ou over" id="btnOver" data-pick="over">Over<small>Going big</small></button>
-      <button class="ou under" id="btnUnder" data-pick="under">Under<small>Cooling off</small></button>
+      <button class="ou over" id="btnOver" data-pick="over"><span id="optAText">Over</span><small id="optASub">Going big</small></button>
+      <button class="ou under" id="btnUnder" data-pick="under"><span id="optBText">Under</span><small id="optBSub">Cooling off</small></button>
     </div>
     <div class="name-row">
       <input type="text" id="fanName" placeholder="Your name (how it shows on the wheel)" maxlength="24" autocomplete="off"/>
@@ -279,11 +279,11 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
     <h2>The Room's Split</h2>
     <div class="tally">
       <div class="col">
-        <div class="lab"><span>Over</span><span id="overCount">0</span></div>
+        <div class="lab"><span id="tallyA">Over</span><span id="overCount">0</span></div>
         <div class="bar over"><span id="overBar"></span></div>
       </div>
       <div class="col">
-        <div class="lab"><span>Under</span><span id="underCount">0</span></div>
+        <div class="lab"><span id="tallyB">Under</span><span id="underCount">0</span></div>
         <div class="bar under"><span id="underBar"></span></div>
       </div>
     </div>
@@ -379,6 +379,18 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
         <div class="field"><label>Week label</label><input type="text" id="aLabel" placeholder="Weekend of 6/21"></div>
         <div class="field"><label>Question shown to fans</label><textarea id="aQuestion" placeholder="Will the Astros go OVER or UNDER 1.5 wins this weekend?"></textarea></div>
         <div class="field"><label>Line / helper (optional)</label><input type="text" id="aLine" placeholder="1.5 wins"></div>
+        <div class="field"><label>Pick buttons</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <button type="button" class="btn ghost sm" id="presetOU">Over / Under</button>
+            <button type="button" class="btn ghost sm" id="presetYN">Yes / No</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <input type="text" id="aOptA" placeholder="Button 1 (Over)" maxlength="20">
+            <input type="text" id="aOptB" placeholder="Button 2 (Under)" maxlength="20">
+            <input type="text" id="aOptASub" placeholder="Small text (Going big)" maxlength="30">
+            <input type="text" id="aOptBSub" placeholder="Small text (Cooling off)" maxlength="30">
+          </div>
+        </div>
         <button class="btn sm" id="saveWeek">Save Changes</button>
         <div class="divider"></div>
         <div class="small">Submissions are <b id="subState">open</b>.</div>
@@ -395,8 +407,8 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
         <h2>Settle the Week</h2>
         <p class="small">Pick what actually happened. Everyone who called it right gets a correct mark and goes on the wheel.</p>
         <div class="ou-wrap" style="margin:10px 0">
-          <button class="ou over sm-ou" id="gradeOver" data-r="over" style="font-size:22px;padding:10px">Over Hit</button>
-          <button class="ou under sm-ou" id="gradeUnder" data-r="under" style="font-size:22px;padding:10px">Under Hit</button>
+          <button class="ou over sm-ou" id="gradeOver" data-r="over" style="font-size:22px;padding:10px"><span id="gradeAText">Over</span> Hit</button>
+          <button class="ou under sm-ou" id="gradeUnder" data-r="under" style="font-size:22px;padding:10px"><span id="gradeBText">Under</span> Hit</button>
         </div>
         <button class="btn" id="gradeBtn">Grade This Week</button>
         <div class="divider"></div>
@@ -557,10 +569,12 @@ const db = {
     }}
     await sb.from('weeks').update({result,status:'finalized'}).eq('id',weekId);
   },
-  async newWeek(label,question,line){
+  async newWeek(label,question,line,labels){
     if(!LIVE){const id=Math.max(...demo.weeks.map(w=>w.id))+1;
-      demo.weeks.push({id,label,question,line,status:'open',result:null});return;}
-    const {error}=await sb.from('weeks').insert({label,question,line,status:'open'}); if(error)throw error;
+      demo.weeks.push({id,label,question,line,status:'open',result:null,...(labels||{})});return;}
+    let {error}=await sb.from('weeks').insert({label,question,line,status:'open',...(labels||{})});
+    if(error && labels && isMissingCol(error)) ({error}=await sb.from('weeks').insert({label,question,line,status:'open'}));
+    if(error)throw error;
   },
   async addCorrect(weekId,name){
     if(!LIVE){
@@ -645,6 +659,25 @@ let isAdmin=false;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function weekLabelById(id,weeks){const w=weeks.find(w=>w.id===id);return w?w.label:'';}
+/* editable pick-button labels (stored per week; values in the DB stay 'over'/'under') */
+const OPT_DEFAULTS={opt_a:'Over',opt_a_sub:'Going big',opt_b:'Under',opt_b_sub:'Cooling off'};
+function opts(wk){
+  const w=wk||{};
+  const hasA=w.opt_a!=null&&w.opt_a!=='', hasB=w.opt_b!=null&&w.opt_b!=='';
+  return {a:hasA?w.opt_a:OPT_DEFAULTS.opt_a, b:hasB?w.opt_b:OPT_DEFAULTS.opt_b,
+    aSub:w.opt_a_sub!=null?w.opt_a_sub:(hasA?'':OPT_DEFAULTS.opt_a_sub),
+    bSub:w.opt_b_sub!=null?w.opt_b_sub:(hasB?'':OPT_DEFAULTS.opt_b_sub)};
+}
+function optLabel(pick){const o=opts(currentWeek);return pick==='over'?o.a:o.b;}
+function applyOptLabels(wk){
+  const o=opts(wk);
+  $('optAText').textContent=o.a;$('optBText').textContent=o.b;
+  $('optASub').textContent=o.aSub;$('optBSub').textContent=o.bSub;
+  $('optASub').style.display=o.aSub?'':'none';$('optBSub').style.display=o.bSub?'':'none';
+  $('tallyA').textContent=o.a;$('tallyB').textContent=o.b;
+  $('gradeAText').textContent=o.a;$('gradeBText').textContent=o.b;
+}
+const isMissingCol=e=>e&&(e.code==='PGRST204'||e.code==='42703'||/column/i.test(e.message||''));
 
 /* =====================================================================
    4) NAV
@@ -670,6 +703,7 @@ async function loadWeek(){
   $('sbLabel').textContent=currentWeek.label||'This Week';
   $('sbQuestion').textContent=currentWeek.question||'—';
   $('sbLine').textContent=currentWeek.line?('Line: '+currentWeek.line):'';
+  applyOptLabels(currentWeek);
   const open=currentWeek.status==='open';
   $('btnOver').disabled=!open;$('btnUnder').disabled=!open;
   $('fanName').disabled=!open;$('submitPick').disabled=!open;
@@ -684,7 +718,7 @@ function pick(p){selectedPick=p;
 }
 $('submitPick').addEventListener('click',async()=>{
   const m=$('submitMsg');const name=$('fanName').value.trim();
-  if(!selectedPick){m.className='msg err';m.textContent='Pick Over or Under first.';return;}
+  if(!selectedPick){m.className='msg err';m.textContent='Pick '+opts(currentWeek).a+' or '+opts(currentWeek).b+' first.';return;}
   if(name.length<2){m.className='msg err';m.textContent='Add your name so it can land on the wheel.';return;}
   try{
     await db.submit(currentWeek.id,name,selectedPick);
@@ -708,7 +742,7 @@ async function refreshTally(){
   $('overBar').style.width=(total?over/total*100:0)+'%';
   $('underBar').style.width=(total?under/total*100:0)+'%';
   $('entryList').innerHTML=picks.slice().reverse().map(s=>
-    `<span class="chip">${esc(s.name)}<span class="pk ${s.pick}">${s.pick.toUpperCase()}</span></span>`).join('');
+    `<span class="chip">${esc(s.name)}<span class="pk ${s.pick}">${esc(optLabel(s.pick).toUpperCase())}</span></span>`).join('');
 }
 setInterval(()=>{if($('view-week').classList.contains('active'))refreshTally();},8000);
 
@@ -911,6 +945,8 @@ function renderAdmin(){
 async function fillAdmin(){
   const wk=await db.openWeek();if(!wk)return;
   $('aLabel').value=wk.label||'';$('aQuestion').value=wk.question||'';$('aLine').value=wk.line||'';
+  {const o=opts(wk);$('aOptA').value=o.a;$('aOptB').value=o.b;$('aOptASub').value=o.aSub;$('aOptBSub').value=o.bSub;}
+  applyOptLabels(wk);
   $('curStatus').textContent=wk.status;$('curStatus').className='pill '+wk.status;
   $('subState').textContent=wk.status==='open'?'open':'closed';
   $('toggleSubs').textContent=wk.status==='open'?'Close Submissions':'Re-open Submissions';
@@ -1058,10 +1094,23 @@ $('signOut').addEventListener('click',async()=>{
 /* save week */
 $('saveWeek').addEventListener('click',async()=>{
   const wk=await db.openWeek();
-  try{await db.updateWeek(wk.id,{label:$('aLabel').value.trim(),question:$('aQuestion').value.trim(),line:$('aLine').value.trim()||null});
-    $('weekMsg').className='msg ok';$('weekMsg').textContent='Saved.';loadWeek();}
-  catch(e){$('weekMsg').className='msg err';$('weekMsg').textContent='Save failed.';console.error(e);}
+  const base={label:$('aLabel').value.trim(),question:$('aQuestion').value.trim(),line:$('aLine').value.trim()||null};
+  const labels={opt_a:$('aOptA').value.trim()||OPT_DEFAULTS.opt_a,opt_b:$('aOptB').value.trim()||OPT_DEFAULTS.opt_b,
+    opt_a_sub:$('aOptASub').value.trim(),opt_b_sub:$('aOptBSub').value.trim()};
+  try{await db.updateWeek(wk.id,{...base,...labels});
+    $('weekMsg').className='msg ok';$('weekMsg').textContent='Saved.';loadWeek();fillAdmin();}
+  catch(e){
+    if(isMissingCol(e)){
+      try{await db.updateWeek(wk.id,base);}catch(_){}
+      $('weekMsg').className='msg err';$('weekMsg').textContent='Week saved, but button labels need a one-time database update (see the SQL in the setup notes).';
+      loadWeek();
+    }else{$('weekMsg').className='msg err';$('weekMsg').textContent='Save failed.';}
+    console.error(e);}
 });
+function setPreset(a,aSub,b,bSub){$('aOptA').value=a;$('aOptASub').value=aSub;$('aOptB').value=b;$('aOptBSub').value=bSub;
+  $('weekMsg').className='msg';$('weekMsg').textContent='Hit Save Changes to apply.';}
+$('presetOU').addEventListener('click',()=>setPreset('Over','Going big','Under','Cooling off'));
+$('presetYN').addEventListener('click',()=>setPreset('Yes','Bet on it','No','Not happening'));
 $('toggleSubs').addEventListener('click',async()=>{
   const wk=await db.openWeek();
   const next=wk.status==='open'?'closed':'open';
@@ -1070,7 +1119,8 @@ $('toggleSubs').addEventListener('click',async()=>{
 $('newWeek').addEventListener('click',async()=>{
   const label=prompt('New week label?','Weekend of ');if(label===null)return;
   const q=prompt('Question for fans?','Will the Astros go OVER or UNDER 1.5 wins this weekend?');if(q===null)return;
-  await db.newWeek(label.trim(),q.trim(),null);
+  const prev=opts(await db.openWeek());
+  await db.newWeek(label.trim(),q.trim(),null,{opt_a:prev.a,opt_a_sub:prev.aSub,opt_b:prev.b,opt_b_sub:prev.bSub});
   $('weekMsg').className='msg ok';$('weekMsg').textContent='New week opened.';
   fillAdmin();loadWeek();
 });
@@ -1081,10 +1131,10 @@ function setGrade(r){gradeResult=r;
   $('gradeOver').classList.toggle('sel',r==='over');
   $('gradeUnder').classList.toggle('sel',r==='under');}
 $('gradeBtn').addEventListener('click',async()=>{
-  const m=$('gradeMsg');if(!gradeResult){m.className='msg err';m.textContent='Pick Over or Under first.';return;}
+  const m=$('gradeMsg');if(!gradeResult){m.className='msg err';m.textContent='Pick '+opts(currentWeek).a+' or '+opts(currentWeek).b+' first.';return;}
   const wk=await db.openWeek();
   try{await db.grade(wk.id,gradeResult);
-    m.className='msg ok';m.textContent='Graded! '+gradeResult.toUpperCase()+' hit. Names pulled below.';
+    m.className='msg ok';m.textContent='Graded! '+optLabel(gradeResult).toUpperCase()+' hit. Names pulled below.';
     refreshNamePull(wk.id);fillAdmin();}
   catch(e){m.className='msg err';m.textContent='Grade failed.';console.error(e);}
 });
