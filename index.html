@@ -188,6 +188,10 @@ canvas#wheel{width:100%;height:100%;border-radius:50%;
 .ticket .who{font-family:'Anton';font-size:30px;text-transform:uppercase;color:var(--navy);line-height:1;margin:6px 0}
 .ticket .tag{font-family:'Saira Condensed';font-size:12px;letter-spacing:.1em;color:#5a4a2a;text-transform:uppercase}
 
+.season-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}
+.season-tab{cursor:pointer;font-family:'Saira Condensed';font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:14px;
+  padding:6px 16px;border:3px solid var(--ink);border-radius:5px;background:var(--cream);color:var(--navy);box-shadow:3px 3px 0 rgba(0,0,0,.2)}
+.season-tab.active{background:var(--navy2);color:#fff}
 /* ---------------- admin ---------------- */
 .admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 @media(max-width:760px){.admin-grid{grid-template-columns:1fr}}
@@ -297,6 +301,7 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
   <div class="card">
     <div class="eyebrow">Season Leaderboard</div>
     <h2>The Standings</h2>
+    <div class="season-tabs" id="seasonTabs"></div>
     <p class="small">Ranked by correct weekly calls. <span class="win-pill">★ = wheel win</span></p>
     <div class="podium" id="podium"></div>
     <table class="standings">
@@ -397,7 +402,9 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
           <button class="btn ghost sm" id="toggleSubs">Close Submissions</button>
           <button class="btn navy sm" id="newWeek">Start a New Week</button>
+          <button class="btn ghost sm" id="newSeason">Start a New Season</button>
         </div>
+        <div class="small" style="margin-top:8px">Current season: <b id="curSeason">—</b></div>
         <div class="msg" id="weekMsg"></div>
       </div>
 
@@ -569,11 +576,15 @@ const db = {
     }}
     await sb.from('weeks').update({result,status:'finalized'}).eq('id',weekId);
   },
-  async newWeek(label,question,line,labels){
+  async newWeek(label,question,line,labels,season){
+    const extra={...(labels||{}),...(season?{season}:{})};
     if(!LIVE){const id=Math.max(...demo.weeks.map(w=>w.id))+1;
-      demo.weeks.push({id,label,question,line,status:'open',result:null,...(labels||{})});return;}
-    let {error}=await sb.from('weeks').insert({label,question,line,status:'open',...(labels||{})});
-    if(error && labels && isMissingCol(error)) ({error}=await sb.from('weeks').insert({label,question,line,status:'open'}));
+      demo.weeks.push({id,label,question,line,status:'open',result:null,...extra});return;}
+    let {error}=await sb.from('weeks').insert({label,question,line,status:'open',...extra});
+    if(error && isMissingCol(error)){
+      if(season && season!==LEGACY_SEASON) throw {needsSeasonSql:true,cause:error};
+      ({error}=await sb.from('weeks').insert({label,question,line,status:'open'}));
+    }
     if(error)throw error;
   },
   async addCorrect(weekId,name){
@@ -677,6 +688,12 @@ function applyOptLabels(wk){
   $('tallyA').textContent=o.a;$('tallyB').textContent=o.b;
   $('gradeAText').textContent=o.a;$('gradeBText').textContent=o.b;
 }
+/* seasons: weeks carry a 'season' (weeks from before seasons existed count as 2026) */
+const LEGACY_SEASON='2026';
+const seasonOf=w=>(w&&w.season)?String(w.season):LEGACY_SEASON;
+function seasonList(weeks){const out=[];weeks.forEach(w=>{const s=seasonOf(w);if(!out.includes(s))out.push(s);});return out;}
+const currentSeasonOf=weeks=>weeks.length?seasonOf(weeks[weeks.length-1]):LEGACY_SEASON;
+let viewSeason=null;   // season shown on the Standings tab (null = current)
 const isMissingCol=e=>e&&(e.code==='PGRST204'||e.code==='42703'||/column/i.test(e.message||''));
 
 /* =====================================================================
@@ -750,7 +767,15 @@ setInterval(()=>{if($('view-week').classList.contains('active'))refreshTally();}
    6) STANDINGS
    ===================================================================== */
 async function renderStandings(){
-  const [correct,wins]=await Promise.all([db.allCorrect(),db.winners()]);
+  const [allC,allW,weeks]=await Promise.all([db.allCorrect(),db.winners(),db.weeks()]);
+  const seasons=seasonList(weeks), cur=currentSeasonOf(weeks);
+  if(!viewSeason||!seasons.includes(viewSeason))viewSeason=cur;
+  const wkSeason={};weeks.forEach(w=>wkSeason[w.id]=seasonOf(w));
+  const inSeason=id=>(id!=null&&wkSeason[id]?wkSeason[id]:LEGACY_SEASON)===viewSeason;
+  const correct=allC.filter(s=>inSeason(s.week_id)), wins=allW.filter(w=>inSeason(w.week_id));
+  const order_=seasons.slice().reverse(); // newest first
+  $('seasonTabs').innerHTML=order_.map(sn=>
+    `<button class="season-tab${sn===viewSeason?' active':''}" data-season="${esc(sn)}">${esc(sn)}${sn===cur&&seasons.length>1?' · Current':''}</button>`).join('');
   const map={};
   correct.forEach(s=>{const k=s.name.trim();(map[k]=map[k]||{name:k,correct:0,wins:0}).correct++;});
   wins.forEach(w=>{const k=w.name.trim();(map[k]=map[k]||{name:k,correct:0,wins:0}).wins++;});
@@ -769,8 +794,9 @@ async function renderStandings(){
     return `<tr><td class="num medal">${medal}</td>
       <td>${esc(r.name)}${r.wins?` <span class="win-pill">★ ${r.wins}</span>`:''}</td>
       <td class="num">${r.correct}</td><td class="num">${r.wins}</td></tr>`;
-  }).join('') || `<tr><td colspan="4" class="center small">No results yet.</td></tr>`;
+  }).join('') || `<tr><td colspan="4" class="center small">No results yet${viewSeason===cur?' this season':''}.</td></tr>`;
 }
+$('seasonTabs').addEventListener('click',e=>{const b=e.target.closest('.season-tab');if(!b)return;viewSeason=b.dataset.season;renderStandings();});
 
 /* =====================================================================
    7) WINNERS HALL
@@ -948,6 +974,7 @@ async function fillAdmin(){
   {const o=opts(wk);$('aOptA').value=o.a;$('aOptB').value=o.b;$('aOptASub').value=o.aSub;$('aOptBSub').value=o.bSub;}
   applyOptLabels(wk);
   $('curStatus').textContent=wk.status;$('curStatus').className='pill '+wk.status;
+  db.weeks().then(ws=>$('curSeason').textContent=currentSeasonOf(ws));
   $('subState').textContent=wk.status==='open'?'open':'closed';
   $('toggleSubs').textContent=wk.status==='open'?'Close Submissions':'Re-open Submissions';
   refreshNamePull(wk.id);
@@ -1119,9 +1146,34 @@ $('toggleSubs').addEventListener('click',async()=>{
 $('newWeek').addEventListener('click',async()=>{
   const label=prompt('New week label?','Weekend of ');if(label===null)return;
   const q=prompt('Question for fans?','Will the Astros go OVER or UNDER 1.5 wins this weekend?');if(q===null)return;
-  const prev=opts(await db.openWeek());
-  await db.newWeek(label.trim(),q.trim(),null,{opt_a:prev.a,opt_a_sub:prev.aSub,opt_b:prev.b,opt_b_sub:prev.bSub});
+  const ws=await db.weeks();const prev=opts(await db.openWeek());
+  const cs=currentSeasonOf(ws);
+  await db.newWeek(label.trim(),q.trim(),null,{opt_a:prev.a,opt_a_sub:prev.aSub,opt_b:prev.b,opt_b_sub:prev.bSub},cs===LEGACY_SEASON&&!ws.some(w=>w.season)?null:cs);
   $('weekMsg').className='msg ok';$('weekMsg').textContent='New week opened.';
+  fillAdmin();loadWeek();
+});
+$('newSeason').addEventListener('click',async()=>{
+  const m=$('weekMsg');const ws=await db.weeks();const cs=currentSeasonOf(ws);
+  const ungraded=ws.filter(w=>seasonOf(w)===cs&&w.status!=='finalized');
+  if(ungraded.length&&!confirm('"'+ungraded.map(w=>w.label).join('", "')+'" hasn\'t been graded yet. Once a new season starts you can\'t grade it from here.\n\nPress Cancel to go grade it first, or OK to start the new season anyway.'))return;
+  const guess=/^\d{4}$/.test(cs)?String(+cs+1):'';
+  const name=prompt('Name the new season (the current '+cs+' standings will be kept under a "'+cs+'" tab):',guess);
+  if(name===null||!name.trim())return;
+  if(seasonList(ws).includes(name.trim())){m.className='msg err';m.textContent='A season called "'+name.trim()+'" already exists.';return;}
+  const label=prompt('Label for the first week of '+name.trim()+'?','Week 1');if(label===null)return;
+  const q=prompt('Question for fans?',$('aQuestion').value||'');if(q===null)return;
+  const prev=opts(await db.openWeek());
+  try{
+    const open=ws.filter(w=>w.status==='open');
+    await db.newWeek(label.trim(),q.trim(),null,{opt_a:prev.a,opt_a_sub:prev.aSub,opt_b:prev.b,opt_b_sub:prev.bSub},name.trim());
+    for(const w of open) await db.updateWeek(w.id,{status:'closed'});
+    viewSeason=null;
+    m.className='msg ok';m.textContent='New season "'+name.trim()+'" started. Standings are fresh; '+cs+' is saved under its own tab.';
+  }catch(e){
+    m.className='msg err';
+    m.textContent=e&&e.needsSeasonSql?'Seasons need a one-time database update first (add the "season" column in Supabase).':'Could not start the season.';
+    console.error(e);
+  }
   fillAdmin();loadWeek();
 });
 /* grade */
