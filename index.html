@@ -112,6 +112,8 @@ main{max-width:1040px;margin:0 auto;padding:26px 18px 70px}
 .ou:hover{transform:translateY(-2px)}
 .ou.sel{background:var(--orange);color:#2a1402}
 .ou.under.sel{background:var(--navy2);color:#fff}
+.ou.third.sel{background:var(--gold);color:#3a2a00}
+.hidden-opt{display:none!important}
 
 .name-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}
 input[type=text],input[type=password]{font-family:'Bitter';font-size:17px;padding:12px 14px;border:3px solid var(--ink);
@@ -137,12 +139,13 @@ input[type=text]:focus,input[type=password]:focus{outline:none;border-color:var(
 .bar > span{display:block;height:100%;width:0;transition:width .6s ease}
 .bar.over > span{background:var(--orange)}
 .bar.under > span{background:var(--navy2)}
+.bar.third > span{background:var(--gold)}
 .tally .lab{font-family:'Saira Condensed';font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:14px;display:flex;justify-content:space-between}
 .entrylist{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
 .chip{font-family:'Saira Condensed';font-weight:600;letter-spacing:.04em;background:var(--cream2);
   border:2px solid var(--line);border-radius:20px;padding:4px 12px;font-size:14px}
 .chip .pk{font-size:11px;font-weight:800;margin-left:6px;padding:1px 6px;border-radius:10px;color:#fff}
-.pk.over{background:var(--orange-deep)}.pk.under{background:var(--navy2)}
+.pk.over{background:var(--orange-deep)}.pk.under{background:var(--navy2)}.pk.third{background:#c98a00}
 
 /* ---------------- standings ---------------- */
 .podium{display:flex;gap:14px;align-items:flex-end;justify-content:center;margin:6px 0 26px;flex-wrap:wrap}
@@ -270,6 +273,7 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
     <div class="ou-wrap">
       <button class="ou over" id="btnOver" data-pick="over"><span id="optAText">Over</span><small id="optASub">Going big</small></button>
       <button class="ou under" id="btnUnder" data-pick="under"><span id="optBText">Under</span><small id="optBSub">Cooling off</small></button>
+      <button class="ou third hidden-opt" id="btnThird" data-pick="third"><span id="optCText"></span><small id="optCSub"></small></button>
     </div>
     <div class="name-row">
       <input type="text" id="fanName" placeholder="Your name (how it shows on the wheel)" maxlength="24" autocomplete="off"/>
@@ -289,6 +293,10 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
       <div class="col">
         <div class="lab"><span id="tallyB">Under</span><span id="underCount">0</span></div>
         <div class="bar under"><span id="underBar"></span></div>
+      </div>
+      <div class="col hidden-opt" id="tallyCCol">
+        <div class="lab"><span id="tallyC"></span><span id="thirdCount">0</span></div>
+        <div class="bar third"><span id="thirdBar"></span></div>
       </div>
     </div>
     <p class="small" style="margin-top:14px"><b id="totalCount">0</b> picks in so far. Updates automatically.</p>
@@ -385,15 +393,14 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
         <div class="field"><label>Question shown to fans</label><textarea id="aQuestion" placeholder="Will the Astros go OVER or UNDER 1.5 wins this weekend?"></textarea></div>
         <div class="field"><label>Line / helper (optional)</label><input type="text" id="aLine" placeholder="1.5 wins"></div>
         <div class="field"><label>Pick buttons</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-            <button type="button" class="btn ghost sm" id="presetOU">Over / Under</button>
-            <button type="button" class="btn ghost sm" id="presetYN">Yes / No</button>
-          </div>
+          <p class="small" style="margin:0 0 8px">Fill in 2 or 3 options. Leave Option 3 blank for a two-way pick. Small text is optional.</p>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <input type="text" id="aOptA" placeholder="Button 1 (Over)" maxlength="20">
-            <input type="text" id="aOptB" placeholder="Button 2 (Under)" maxlength="20">
-            <input type="text" id="aOptASub" placeholder="Small text (Going big)" maxlength="30">
-            <input type="text" id="aOptBSub" placeholder="Small text (Cooling off)" maxlength="30">
+            <input type="text" id="aOptA" placeholder="Option 1" maxlength="20">
+            <input type="text" id="aOptASub" placeholder="Small text (optional)" maxlength="30">
+            <input type="text" id="aOptB" placeholder="Option 2" maxlength="20">
+            <input type="text" id="aOptBSub" placeholder="Small text (optional)" maxlength="30">
+            <input type="text" id="aOptC" placeholder="Option 3 (optional)" maxlength="20">
+            <input type="text" id="aOptCSub" placeholder="Small text (optional)" maxlength="30">
           </div>
         </div>
         <button class="btn sm" id="saveWeek">Save Changes</button>
@@ -416,6 +423,7 @@ footer{text-align:center;font-family:'Saira Condensed';letter-spacing:.1em;text-
         <div class="ou-wrap" style="margin:10px 0">
           <button class="ou over sm-ou" id="gradeOver" data-r="over" style="font-size:22px;padding:10px"><span id="gradeAText">Over</span> Hit</button>
           <button class="ou under sm-ou" id="gradeUnder" data-r="under" style="font-size:22px;padding:10px"><span id="gradeBText">Under</span> Hit</button>
+          <button class="ou third sm-ou hidden-opt" id="gradeThird" data-r="third" style="font-size:22px;padding:10px"><span id="gradeCText"></span> Hit</button>
         </div>
         <button class="btn" id="gradeBtn">Grade This Week</button>
         <div class="divider"></div>
@@ -671,22 +679,25 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function weekLabelById(id,weeks){const w=weeks.find(w=>w.id===id);return w?w.label:'';}
 /* editable pick-button labels (stored per week; values in the DB stay 'over'/'under') */
-const OPT_DEFAULTS={opt_a:'Over',opt_a_sub:'Going big',opt_b:'Under',opt_b_sub:'Cooling off'};
+/* picks are stored as 'over' (option 1), 'under' (option 2), 'third' (option 3) */
+const BLANK_OPTS={opt_a:'',opt_a_sub:'',opt_b:'',opt_b_sub:'',opt_c:'',opt_c_sub:''};
+const t_=v=>(v==null?'':String(v)).trim();
 function opts(wk){
   const w=wk||{};
-  const hasA=w.opt_a!=null&&w.opt_a!=='', hasB=w.opt_b!=null&&w.opt_b!=='';
-  return {a:hasA?w.opt_a:OPT_DEFAULTS.opt_a, b:hasB?w.opt_b:OPT_DEFAULTS.opt_b,
-    aSub:w.opt_a_sub!=null?w.opt_a_sub:(hasA?'':OPT_DEFAULTS.opt_a_sub),
-    bSub:w.opt_b_sub!=null?w.opt_b_sub:(hasB?'':OPT_DEFAULTS.opt_b_sub)};
+  const a=t_(w.opt_a),b=t_(w.opt_b),c=t_(w.opt_c);
+  if(!a&&!b&&!c) return {a:'Over',aSub:'Going big',b:'Under',bSub:'Cooling off',c:'',cSub:''}; // weeks from before custom options
+  return {a:a||'Option 1',aSub:t_(w.opt_a_sub),b:b||'Option 2',bSub:t_(w.opt_b_sub),c,cSub:c?t_(w.opt_c_sub):''};
 }
-function optLabel(pick){const o=opts(currentWeek);return pick==='over'?o.a:o.b;}
+function optLabel(pick,wk){const o=opts(wk||currentWeek);return pick==='over'?o.a:pick==='under'?o.b:(o.c||'Option 3');}
+function optNames(wk){const o=opts(wk);const n=[o.a,o.b].concat(o.c?[o.c]:[]);return n.length===3?n[0]+', '+n[1]+' or '+n[2]:n.join(' or ');}
 function applyOptLabels(wk){
   const o=opts(wk);
-  $('optAText').textContent=o.a;$('optBText').textContent=o.b;
-  $('optASub').textContent=o.aSub;$('optBSub').textContent=o.bSub;
-  $('optASub').style.display=o.aSub?'':'none';$('optBSub').style.display=o.bSub?'':'none';
-  $('tallyA').textContent=o.a;$('tallyB').textContent=o.b;
-  $('gradeAText').textContent=o.a;$('gradeBText').textContent=o.b;
+  $('optAText').textContent=o.a;$('optBText').textContent=o.b;$('optCText').textContent=o.c;
+  $('optASub').textContent=o.aSub;$('optBSub').textContent=o.bSub;$('optCSub').textContent=o.cSub;
+  $('optASub').style.display=o.aSub?'':'none';$('optBSub').style.display=o.bSub?'':'none';$('optCSub').style.display=o.cSub?'':'none';
+  $('tallyA').textContent=o.a;$('tallyB').textContent=o.b;$('tallyC').textContent=o.c;
+  $('gradeAText').textContent=o.a;$('gradeBText').textContent=o.b;$('gradeCText').textContent=o.c;
+  ['btnThird','tallyCCol','gradeThird'].forEach(id=>$(id).classList.toggle('hidden-opt',!o.c));
 }
 /* seasons: weeks carry a 'season' (weeks from before seasons existed count as 2026) */
 const LEGACY_SEASON='2026';
@@ -722,26 +733,28 @@ async function loadWeek(){
   $('sbLine').textContent=currentWeek.line?('Line: '+currentWeek.line):'';
   applyOptLabels(currentWeek);
   const open=currentWeek.status==='open';
-  $('btnOver').disabled=!open;$('btnUnder').disabled=!open;
+  $('btnOver').disabled=!open;$('btnUnder').disabled=!open;$('btnThird').disabled=!open;
   $('fanName').disabled=!open;$('submitPick').disabled=!open;
   if(!open){$('submitMsg').className='msg';$('submitMsg').textContent='Submissions for this week are closed. Check the Standings!';}
   refreshTally();
 }
 $('btnOver').addEventListener('click',()=>pick('over'));
 $('btnUnder').addEventListener('click',()=>pick('under'));
+$('btnThird').addEventListener('click',()=>pick('third'));
 function pick(p){selectedPick=p;
   $('btnOver').classList.toggle('sel',p==='over');
   $('btnUnder').classList.toggle('sel',p==='under');
+  $('btnThird').classList.toggle('sel',p==='third');
 }
 $('submitPick').addEventListener('click',async()=>{
   const m=$('submitMsg');const name=$('fanName').value.trim();
-  if(!selectedPick){m.className='msg err';m.textContent='Pick '+opts(currentWeek).a+' or '+opts(currentWeek).b+' first.';return;}
+  if(!selectedPick){m.className='msg err';m.textContent='Pick '+optNames(currentWeek)+' first.';return;}
   if(name.length<2){m.className='msg err';m.textContent='Add your name so it can land on the wheel.';return;}
   try{
     await db.submit(currentWeek.id,name,selectedPick);
     m.className='msg ok';m.textContent='✅ Locked in, '+name+'! Good luck.';
     $('fanName').value='';selectedPick=null;
-    $('btnOver').classList.remove('sel');$('btnUnder').classList.remove('sel');
+    $('btnOver').classList.remove('sel');$('btnUnder').classList.remove('sel');$('btnThird').classList.remove('sel');
     refreshTally();
   }catch(e){
     if(e&&e.code==='23505'){m.className='msg err';m.textContent='That name already submitted this week.';}
@@ -754,10 +767,12 @@ async function refreshTally(){
   const picks=subs.filter(s=>s.pick);
   const over=picks.filter(s=>s.pick==='over').length;
   const under=picks.filter(s=>s.pick==='under').length;
+  const third=picks.filter(s=>s.pick==='third').length;
   const total=picks.length;
   $('overCount').textContent=over;$('underCount').textContent=under;$('totalCount').textContent=total;
   $('overBar').style.width=(total?over/total*100:0)+'%';
   $('underBar').style.width=(total?under/total*100:0)+'%';
+  $('thirdCount').textContent=third;$('thirdBar').style.width=(total?third/total*100:0)+'%';
   $('entryList').innerHTML=picks.slice().reverse().map(s=>
     `<span class="chip">${esc(s.name)}<span class="pk ${s.pick}">${esc(optLabel(s.pick).toUpperCase())}</span></span>`).join('');
 }
@@ -971,7 +986,7 @@ function renderAdmin(){
 async function fillAdmin(){
   const wk=await db.openWeek();if(!wk)return;
   $('aLabel').value=wk.label||'';$('aQuestion').value=wk.question||'';$('aLine').value=wk.line||'';
-  {const o=opts(wk);$('aOptA').value=o.a;$('aOptB').value=o.b;$('aOptASub').value=o.aSub;$('aOptBSub').value=o.bSub;}
+  [['aOptA','opt_a'],['aOptASub','opt_a_sub'],['aOptB','opt_b'],['aOptBSub','opt_b_sub'],['aOptC','opt_c'],['aOptCSub','opt_c_sub']].forEach(([id,k])=>$(id).value=t_(wk[k]));
   applyOptLabels(wk);
   $('curStatus').textContent=wk.status;$('curStatus').className='pill '+wk.status;
   db.weeks().then(ws=>$('curSeason').textContent=currentSeasonOf(ws));
@@ -1122,22 +1137,20 @@ $('signOut').addEventListener('click',async()=>{
 $('saveWeek').addEventListener('click',async()=>{
   const wk=await db.openWeek();
   const base={label:$('aLabel').value.trim(),question:$('aQuestion').value.trim(),line:$('aLine').value.trim()||null};
-  const labels={opt_a:$('aOptA').value.trim()||OPT_DEFAULTS.opt_a,opt_b:$('aOptB').value.trim()||OPT_DEFAULTS.opt_b,
-    opt_a_sub:$('aOptASub').value.trim(),opt_b_sub:$('aOptBSub').value.trim()};
+  const labels={opt_a:$('aOptA').value.trim(),opt_a_sub:$('aOptASub').value.trim(),
+    opt_b:$('aOptB').value.trim(),opt_b_sub:$('aOptBSub').value.trim(),
+    opt_c:$('aOptC').value.trim(),opt_c_sub:$('aOptCSub').value.trim()};
+  if(!labels.opt_a||!labels.opt_b){$('weekMsg').className='msg err';$('weekMsg').textContent='Fill in at least Option 1 and Option 2.';return;}
   try{await db.updateWeek(wk.id,{...base,...labels});
     $('weekMsg').className='msg ok';$('weekMsg').textContent='Saved.';loadWeek();fillAdmin();}
   catch(e){
     if(isMissingCol(e)){
       try{await db.updateWeek(wk.id,base);}catch(_){}
-      $('weekMsg').className='msg err';$('weekMsg').textContent='Week saved, but button labels need a one-time database update (see the SQL in the setup notes).';
+      $('weekMsg').className='msg err';$('weekMsg').textContent='Week saved, but options need a one-time database update (run the new SQL in Supabase).';
       loadWeek();
     }else{$('weekMsg').className='msg err';$('weekMsg').textContent='Save failed.';}
     console.error(e);}
 });
-function setPreset(a,aSub,b,bSub){$('aOptA').value=a;$('aOptASub').value=aSub;$('aOptB').value=b;$('aOptBSub').value=bSub;
-  $('weekMsg').className='msg';$('weekMsg').textContent='Hit Save Changes to apply.';}
-$('presetOU').addEventListener('click',()=>setPreset('Over','Going big','Under','Cooling off'));
-$('presetYN').addEventListener('click',()=>setPreset('Yes','Bet on it','No','Not happening'));
 $('toggleSubs').addEventListener('click',async()=>{
   const wk=await db.openWeek();
   const next=wk.status==='open'?'closed':'open';
@@ -1146,9 +1159,9 @@ $('toggleSubs').addEventListener('click',async()=>{
 $('newWeek').addEventListener('click',async()=>{
   const label=prompt('New week label?','Weekend of ');if(label===null)return;
   const q=prompt('Question for fans?','Will the Astros go OVER or UNDER 1.5 wins this weekend?');if(q===null)return;
-  const ws=await db.weeks();const prev=opts(await db.openWeek());
+  const ws=await db.weeks();
   const cs=currentSeasonOf(ws);
-  await db.newWeek(label.trim(),q.trim(),null,{opt_a:prev.a,opt_a_sub:prev.aSub,opt_b:prev.b,opt_b_sub:prev.bSub},cs===LEGACY_SEASON&&!ws.some(w=>w.season)?null:cs);
+  await db.newWeek(label.trim(),q.trim(),null,BLANK_OPTS,cs===LEGACY_SEASON&&!ws.some(w=>w.season)?null:cs);
   $('weekMsg').className='msg ok';$('weekMsg').textContent='New week opened.';
   fillAdmin();loadWeek();
 });
@@ -1162,10 +1175,9 @@ $('newSeason').addEventListener('click',async()=>{
   if(seasonList(ws).includes(name.trim())){m.className='msg err';m.textContent='A season called "'+name.trim()+'" already exists.';return;}
   const label=prompt('Label for the first week of '+name.trim()+'?','Week 1');if(label===null)return;
   const q=prompt('Question for fans?',$('aQuestion').value||'');if(q===null)return;
-  const prev=opts(await db.openWeek());
   try{
     const open=ws.filter(w=>w.status==='open');
-    await db.newWeek(label.trim(),q.trim(),null,{opt_a:prev.a,opt_a_sub:prev.aSub,opt_b:prev.b,opt_b_sub:prev.bSub},name.trim());
+    await db.newWeek(label.trim(),q.trim(),null,BLANK_OPTS,name.trim());
     for(const w of open) await db.updateWeek(w.id,{status:'closed'});
     viewSeason=null;
     m.className='msg ok';m.textContent='New season "'+name.trim()+'" started. Standings are fresh; '+cs+' is saved under its own tab.';
@@ -1179,11 +1191,13 @@ $('newSeason').addEventListener('click',async()=>{
 /* grade */
 $('gradeOver').addEventListener('click',()=>setGrade('over'));
 $('gradeUnder').addEventListener('click',()=>setGrade('under'));
+$('gradeThird').addEventListener('click',()=>setGrade('third'));
 function setGrade(r){gradeResult=r;
   $('gradeOver').classList.toggle('sel',r==='over');
-  $('gradeUnder').classList.toggle('sel',r==='under');}
+  $('gradeUnder').classList.toggle('sel',r==='under');
+  $('gradeThird').classList.toggle('sel',r==='third');}
 $('gradeBtn').addEventListener('click',async()=>{
-  const m=$('gradeMsg');if(!gradeResult){m.className='msg err';m.textContent='Pick '+opts(currentWeek).a+' or '+opts(currentWeek).b+' first.';return;}
+  const m=$('gradeMsg');if(!gradeResult){m.className='msg err';m.textContent='Pick '+optNames(currentWeek)+' first.';return;}
   const wk=await db.openWeek();
   try{await db.grade(wk.id,gradeResult);
     m.className='msg ok';m.textContent='Graded! '+optLabel(gradeResult).toUpperCase()+' hit. Names pulled below.';
