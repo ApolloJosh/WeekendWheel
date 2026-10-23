@@ -570,7 +570,15 @@ const db = {
   /* ---- admin ---- */
   async updateWeek(id,fields){
     if(!LIVE){Object.assign(demo.weeks.find(w=>w.id===id),fields);return;}
-    const {error}=await sb.from('weeks').update(fields).eq('id',id); if(error)throw error;
+    const f={...fields};
+    for(let i=0;i<10;i++){
+      const {error}=await sb.from('weeks').update(f).eq('id',id);
+      if(!error)return;
+      const col=missingColName(error);
+      if(!col||!(col in f)||Object.keys(f).length<=1)throw error;
+      console.warn('weeks table has no "'+col+'" column yet — saving without it');
+      delete f[col];
+    }
   },
   async grade(weekId,result){
     // mark correctness for everyone with a pick
@@ -588,12 +596,17 @@ const db = {
     const extra={...(labels||{}),...(season?{season}:{})};
     if(!LIVE){const id=Math.max(...demo.weeks.map(w=>w.id))+1;
       demo.weeks.push({id,label,question,line,status:'open',result:null,...extra});return;}
-    let {error}=await sb.from('weeks').insert({label,question,line,status:'open',...extra});
-    if(error && isMissingCol(error)){
-      if(season && season!==LEGACY_SEASON) throw {needsSeasonSql:true,cause:error};
-      ({error}=await sb.from('weeks').insert({label,question,line,status:'open'}));
+    // insert; if the database is missing an optional column, drop just that field and retry
+    const row={label,question,line,status:'open',...extra};
+    for(let i=0;i<10;i++){
+      const {error}=await sb.from('weeks').insert(row);
+      if(!error)return;
+      const col=missingColName(error);
+      if(!col||!(col in row)||['label','question','line','status'].includes(col))throw error;
+      if(col==='season'&&season&&season!==LEGACY_SEASON)throw {needsSeasonSql:true,cause:error};
+      console.warn('weeks table has no "'+col+'" column yet — saving without it');
+      delete row[col];
     }
-    if(error)throw error;
   },
   async addCorrect(weekId,name){
     if(!LIVE){
@@ -705,6 +718,10 @@ const seasonOf=w=>(w&&w.season)?String(w.season):LEGACY_SEASON;
 function seasonList(weeks){const out=[];weeks.forEach(w=>{const s=seasonOf(w);if(!out.includes(s))out.push(s);});return out;}
 const currentSeasonOf=weeks=>weeks.length?seasonOf(weeks[weeks.length-1]):LEGACY_SEASON;
 let viewSeason=null;   // season shown on the Standings tab (null = current)
+function missingColName(e){
+  if(!e)return null;const m=String(e.message||'').match(/'([a-z_]+)' column|column "?([a-z_]+)"? (?:of relation|does not exist)/i);
+  return m?(m[1]||m[2]):null;
+}
 const isMissingCol=e=>e&&(e.code==='PGRST204'||e.code==='42703'||/column/i.test(e.message||''));
 
 /* =====================================================================
@@ -1161,8 +1178,19 @@ $('newWeek').addEventListener('click',async()=>{
   const q=prompt('Question for fans?','Will the Astros go OVER or UNDER 1.5 wins this weekend?');if(q===null)return;
   const ws=await db.weeks();
   const cs=currentSeasonOf(ws);
-  await db.newWeek(label.trim(),q.trim(),null,BLANK_OPTS,cs===LEGACY_SEASON&&!ws.some(w=>w.season)?null:cs);
-  $('weekMsg').className='msg ok';$('weekMsg').textContent='New week opened.';
+  const m=$('weekMsg');m.className='msg';m.textContent='Opening new week…';
+  try{
+    await db.newWeek(label.trim(),q.trim(),null,BLANK_OPTS,cs===LEGACY_SEASON&&!ws.some(w=>w.season)?null:cs);
+    // close any older weeks that were still open so only the new one takes picks
+    const open=ws.filter(w=>w.status==='open');
+    for(const w of open) await db.updateWeek(w.id,{status:'closed'});
+    m.className='msg ok';m.textContent='New week "'+label.trim()+'" opened. Fill in the options above and hit Save Changes.';
+  }catch(e){
+    console.error(e);
+    m.className='msg err';
+    m.textContent=e&&e.needsSeasonSql?'Seasons need the one-time database update first (add the "season" column in Supabase).'
+      :'Could not open the new week: '+((e&&(e.message||(e.cause&&e.cause.message)))||'unknown error');
+  }
   fillAdmin();loadWeek();
 });
 $('newSeason').addEventListener('click',async()=>{
@@ -1183,7 +1211,7 @@ $('newSeason').addEventListener('click',async()=>{
     m.className='msg ok';m.textContent='New season "'+name.trim()+'" started. Standings are fresh; '+cs+' is saved under its own tab.';
   }catch(e){
     m.className='msg err';
-    m.textContent=e&&e.needsSeasonSql?'Seasons need a one-time database update first (add the "season" column in Supabase).':'Could not start the season.';
+    m.textContent=e&&e.needsSeasonSql?'Seasons need a one-time database update first (add the "season" column in Supabase).':'Could not start the season: '+((e&&e.message)||'unknown error');
     console.error(e);
   }
   fillAdmin();loadWeek();
